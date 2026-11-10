@@ -1,0 +1,7 @@
+# CSX 人体切菜检测 · 阶段一
+# 开发机实测版本：Python 3.12.10 / mediapipe 0.10.35 / opencv-python 5.0.0.93 /
+#                 opencv-contrib-python 4.10.0.84 / numpy 2.3.5 / Pillow 12.3.0
+mediapipe>=0.10.30,<0.11
+opencv-python>=4.10,<6
+numpy>=1.26,<3
+Pillow>=10,<13

@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "project": {
+    "name": "厨房情境感知（阶段一）",
+    "schema_version": "1.0"
+  },
+  "models": {
+    "pose": "lite",
+    "pose_files": {
+      "lite": "models/pose_landmarker_lite.task",
+      "full": "models/pose_landmarker_full.task"
+    },
+    "hand": "models/hand_landmarker.task",
+    "verify_sha256": true,
+    "manifest": "models/MANIFEST.json"
+  },
+  "camera": {
+    "index": 0,
+    "width": 640,
+    "height": 480,
+    "fps": 30,
+    "buffer_size": 1,
+    "backends": ["dshow", "msmf", "any"],
+    "probe_max_index": 5
+  },
+  "inference": {
+    "num_poses": 1,
+    "num_hands": 2,
+    "min_pose_detection_confidence": 0.5,
+    "min_hand_detection_confidence": 0.5,
+    "min_hand_presence_confidence": 0.5,
+    "min_tracking_confidence": 0.5
+  },
+  "torso": {
+    "visibility_min": 0.5,
+    "hip_visibility_penalty": 0.85,
+    "front_z_threshold": 0.02,
+    "calibration_file": "outputs/calibration.json",
+    "ema_alpha": 0.3,
+    "stable_frames": 5,
+    "confidence_min": 0.45,
+    "thresholds": {
+      "upright_pitch_deg": 15.0,
+      "backward_pitch_deg": -15.0,
+      "bent_pitch_deg": 45.0,
+      "side_roll_deg": 10.0,
+      "turn_yaw_deg": 30.0
+    },
+    "labels_zh": {
+      "no_person": "未检测到人物",
+      "not_visible": "躯干不可见",
+      "upright": "直立",
+      "leaning_forward": "前倾",
+      "leaning_backward": "后仰",
+      "leaning_side": "侧倾",
+      "bent_over": "俯身",
+      "uncertain": "不确定"
+    },
+    "custom_rule_module": "kitchen_perception.custom_rules",
+    "custom_rule_function": "torso_state"
+  },
+  "hands": {
+    "ema_alpha": 0.5,
+    "stable_frames": 2,
+    "min_hand_score": 0.5,
+    "finger_thresholds": {
+      "extended_curl_max_deg": 40.0,
+      "extended_pip_min_deg": 150.0,
+      "flexed_curl_min_deg": 100.0,
+      "flexed_pip_max_deg": 110.0,
+      "thumb_extended_ip_min_deg": 150.0,
+      "thumb_extended_dist_ratio": 0.65,
+      "thumb_flexed_ip_max_deg": 110.0,
+      "thumb_flexed_dist_ratio": 0.35,
+      "pinch_dist_ratio": 0.4
+    },
+    "labels_zh": {
+      "extended": "伸直",
+      "partial": "半屈",
+      "flexed": "弯曲",
+      "unknown": "未知"
+    },
+    "grip_labels_zh": {
+      "open": "张开",
+      "fist": "握拳",
+      "pinch": "捏取",
+      "point": "指向",
+      "partial": "半握",
+      "unknown": "未知"
+    },
+    "custom_rule_module": "kitchen_perception.custom_rules",
+    "custom_rule_function": "grip_state"
+  },
+  "motion": {
+    "busy_speed_norm_per_s": 0.35,
+    "window_s": 0.6,
+    "in_workspace_margin": 0.1
+  },
+  "latency": {
+    "target_p95_ms": 250.0,
+    "hard_cap_ms": 500.0,
+    "eval_every_frames": 30,
+    "window_frames": 120,
+    "levels": [
+      {"name": "L0", "pose_every_n": 1, "hand_every_n": 1, "analysis_scale": 1.0},
+      {"name": "L1", "pose_every_n": 1, "hand_every_n": 2, "analysis_scale": 1.0},
+      {"name": "L2", "pose_every_n": 2, "hand_every_n": 2, "analysis_scale": 1.0},
+      {"name": "L3", "pose_every_n": 2, "hand_every_n": 3, "analysis_scale": 0.75}
+    ]
+  },
+  "ui": {
+    "title": "厨房情境感知 · 阶段一",
+    "width": 1180,
+    "height": 720,
+    "mirror_preview": true,
+    "font_family": "Microsoft YaHei UI",
+    "poll_ms": 30,
+    "panel_update_every_frames": 2
+  },
+  "output": {
+    "dir": "outputs",
+    "snapshot_dir": "outputs/snapshots",
+    "jsonl": "outputs/perception.jsonl",
+    "annotated_dir": "outputs/annotated"
+  },
+  "logging": {
+    "level": "INFO"
+  }
+}

@@ -1,0 +1,20 @@
+# 运行产物
+outputs/
+dist/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# 编辑器
+.vscode/
+.idea/
+
+# 临时/调试
+*.tmp
+scratch/

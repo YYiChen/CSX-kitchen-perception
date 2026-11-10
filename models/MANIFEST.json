@@ -1,0 +1,35 @@
+{
+  "schema": "kitchen-perception-models/1",
+  "source": "MediaPipe official model assets",
+  "license": "Apache-2.0 (MediaPipe, Google LLC)",
+  "downloaded_at": "2026-11-10",
+  "models": [
+    {
+      "name": "pose_landmarker_lite",
+      "role": "pose",
+      "variant": "lite",
+      "path": "models/pose_landmarker_lite.task",
+      "bytes": 5777746,
+      "sha256": "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a",
+      "url": "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
+    },
+    {
+      "name": "pose_landmarker_full",
+      "role": "pose",
+      "variant": "full",
+      "path": "models/pose_landmarker_full.task",
+      "bytes": 9398198,
+      "sha256": "5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1",
+      "url": "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task"
+    },
+    {
+      "name": "hand_landmarker",
+      "role": "hand",
+      "variant": "full",
+      "path": "models/hand_landmarker.task",
+      "bytes": 7819105,
+      "sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+      "url": "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+    }
+  ]
+}

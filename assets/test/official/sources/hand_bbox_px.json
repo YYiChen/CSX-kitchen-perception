@@ -1,0 +1,138 @@
+{
+ "male_full_height_hands.jpg": [
+  {
+   "hand": 0,
+   "handedness": "Left",
+   "score": 0.9577,
+   "bbox_px": [
+    92.2,
+    86.6
+   ],
+   "bbox_diag_px": 126.5,
+   "image_hw": [
+    638,
+    1000
+   ]
+  },
+  {
+   "hand": 1,
+   "handedness": "Right",
+   "score": 0.9365,
+   "bbox_px": [
+    59.6,
+    79.8
+   ],
+   "bbox_diag_px": 99.6,
+   "image_hw": [
+    638,
+    1000
+   ]
+  }
+ ],
+ "right_hands.jpg": [
+  {
+   "hand": 0,
+   "handedness": "Right",
+   "score": 0.9433,
+   "bbox_px": [
+    257.3,
+    332.7
+   ],
+   "bbox_diag_px": 420.6,
+   "image_hw": [
+    720,
+    382
+   ]
+  },
+  {
+   "hand": 1,
+   "handedness": "Right",
+   "score": 0.9606,
+   "bbox_px": [
+    255.9,
+    333.8
+   ],
+   "bbox_diag_px": 420.6,
+   "image_hw": [
+    720,
+    382
+   ]
+  }
+ ],
+ "left_hands.jpg": [
+  {
+   "hand": 0,
+   "handedness": "Left",
+   "score": 0.9679,
+   "bbox_px": [
+    256.0,
+    330.5
+   ],
+   "bbox_diag_px": 418.1,
+   "image_hw": [
+    720,
+    382
+   ]
+  },
+  {
+   "hand": 1,
+   "handedness": "Left",
+   "score": 0.9562,
+   "bbox_px": [
+    250.9,
+    330.8
+   ],
+   "bbox_diag_px": 415.2,
+   "image_hw": [
+    720,
+    382
+   ]
+  }
+ ],
+ "fist.png": [
+  {
+   "hand": 0,
+   "handedness": "Right",
+   "score": 0.989,
+   "bbox_px": [
+    129.5,
+    159.0
+   ],
+   "bbox_diag_px": 205.1,
+   "image_hw": [
+    358,
+    354
+   ]
+  }
+ ],
+ "woman_hands.jpg": [
+  {
+   "hand": 0,
+   "handedness": "Left",
+   "score": 0.936,
+   "bbox_px": [
+    239.9,
+    131.1
+   ],
+   "bbox_diag_px": 273.4,
+   "image_hw": [
+    640,
+    960
+   ]
+  },
+  {
+   "hand": 1,
+   "handedness": "Right",
+   "score": 0.9622,
+   "bbox_px": [
+    170.1,
+    112.6
+   ],
+   "bbox_diag_px": 204.0,
+   "image_hw": [
+    640,
+    960
+   ]
+  }
+ ]
+}

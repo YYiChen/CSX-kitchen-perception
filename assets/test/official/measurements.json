@@ -1,0 +1,1164 @@
+{
+  "environment": {
+    "python": "3.12.10",
+    "mediapipe": "0.10.35",
+    "numpy": "2.3.5",
+    "opencv": "5.0.0",
+    "cpu_logical": 32
+  },
+  "stage": "done",
+  "images": {
+    "pose.jpg": {
+      "file": "pose.jpg",
+      "file_bytes": 44100,
+      "width": 1000,
+      "height": 667,
+      "pose_lite": {
+        "pose_model": "pose_landmarker_lite.task",
+        "num_poses": 1,
+        "detected": true,
+        "landmark_count": 33,
+        "normalized_xyz_sample": {
+          "0": [
+            0.4651,
+            0.4226,
+            -0.1515
+          ],
+          "11": [
+            0.5408,
+            0.482,
+            -0.0985
+          ],
+          "12": [
+            0.4548,
+            0.491,
+            0.062
+          ],
+          "23": [
+            0.5168,
+            0.7084,
+            -0.0547
+          ],
+          "24": [
+            0.4674,
+            0.7054,
+            0.0548
+          ]
+        },
+        "world_xyz_sample_m": {
+          "0": [
+            -0.0857,
+            -0.6148,
+            -0.1474
+          ],
+          "11": [
+            0.1751,
+            -0.4985,
+            -0.0934
+          ],
+          "12": [
+            -0.1404,
+            -0.4797,
+            0.0308
+          ],
+          "23": [
+            0.1018,
+            0.0102,
+            -0.0464
+          ],
+          "24": [
+            -0.1025,
+            -0.0105,
+            0.0467
+          ]
+        },
+        "nose_z_minus_shoulder_mid_z_m": -0.1161,
+        "shoulder_mid_y_minus_hip_mid_y_m": -0.489,
+        "shoulder_mid_y_minus_nose_y_m": 0.1257
+      },
+      "pose_full": {
+        "pose_model": "pose_landmarker_full.task",
+        "num_poses": 1,
+        "detected": true,
+        "landmark_count": 33,
+        "normalized_xyz_sample": {
+          "0": [
+            0.4633,
+            0.4296,
+            -0.1928
+          ],
+          "11": [
+            0.5446,
+            0.4819,
+            -0.1085
+          ],
+          "12": [
+            0.4497,
+            0.4873,
+            -0.021
+          ],
+          "23": [
+            0.5221,
+            0.7074,
+            -0.0455
+          ],
+          "24": [
+            0.4645,
+            0.6984,
+            0.0454
+          ]
+        },
+        "world_xyz_sample_m": {
+          "0": [
+            -0.1177,
+            -0.5778,
+            -0.1884
+          ],
+          "11": [
+            0.1687,
+            -0.4958,
+            -0.0907
+          ],
+          "12": [
+            -0.1589,
+            -0.4912,
+            -0.0522
+          ],
+          "23": [
+            0.1026,
+            0.0086,
+            -0.0361
+          ],
+          "24": [
+            -0.1031,
+            -0.009,
+            0.0369
+          ]
+        },
+        "nose_z_minus_shoulder_mid_z_m": -0.117,
+        "shoulder_mid_y_minus_hip_mid_y_m": -0.4933,
+        "shoulder_mid_y_minus_nose_y_m": 0.0843
+      },
+      "pose_first_frame_ms": {
+        "lite": 43.9,
+        "full": 53.0
+      },
+      "num_hands": 0,
+      "hand_first_frame_ms": 52.6,
+      "hands": []
+    },
+    "male_full_height_hands.jpg": {
+      "file": "male_full_height_hands.jpg",
+      "file_bytes": 55658,
+      "width": 638,
+      "height": 1000,
+      "pose_lite": {
+        "pose_model": "pose_landmarker_lite.task",
+        "num_poses": 1,
+        "detected": true,
+        "landmark_count": 33,
+        "normalized_xyz_sample": {
+          "0": [
+            0.5155,
+            0.1628,
+            -0.6708
+          ],
+          "11": [
+            0.6319,
+            0.2724,
+            -0.2655
+          ],
+          "12": [
+            0.4005,
+            0.2738,
+            -0.1192
+          ],
+          "23": [
+            0.5727,
+            0.5077,
+            -0.0277
+          ],
+          "24": [
+            0.4342,
+            0.5047,
+            0.0282
+          ]
+        },
+        "world_xyz_sample_m": {
+          "0": [
+            0.0216,
+            -0.6452,
+            -0.2824
+          ],
+          "11": [
+            0.1996,
+            -0.4623,
+            -0.127
+          ],
+          "12": [
+            -0.1432,
+            -0.4717,
+            -0.0774
+          ],
+          "23": [
+            0.1102,
+            0.0089,
+            -0.0079
+          ],
+          "24": [
+            -0.1104,
+            -0.0095,
+            0.0083
+          ]
+        },
+        "nose_z_minus_shoulder_mid_z_m": -0.1803,
+        "shoulder_mid_y_minus_hip_mid_y_m": -0.4667,
+        "shoulder_mid_y_minus_nose_y_m": 0.1782
+      },
+      "pose_full": {
+        "pose_model": "pose_landmarker_full.task",
+        "num_poses": 1,
+        "detected": true,
+        "landmark_count": 33,
+        "normalized_xyz_sample": {
+          "0": [
+            0.506,
+            0.1547,
+            -0.7067
+          ],
+          "11": [
+            0.6377,
+            0.2714,
+            -0.2966
+          ],
+          "12": [
+            0.4003,
+            0.2734,
+            -0.1863
+          ],
+          "23": [
+            0.5646,
+            0.5087,
+            -0.0154
+          ],
+          "24": [
+            0.4296,
+            0.5063,
+            0.0149
+          ]
+        },
+        "world_xyz_sample_m": {
+          "0": [
+            0.0334,
+            -0.6553,
+            -0.2913
+          ],
+          "11": [
+            0.2037,
+            -0.4716,
+            -0.115
+          ],
+          "12": [
+            -0.1335,
+            -0.4745,
+            -0.0962
+          ],
+          "23": [
+            0.1163,
+            0.0044,
+            0.0
+          ],
+          "24": [
+            -0.1166,
+            -0.0051,
+            0.0008
+          ]
+        },
+        "nose_z_minus_shoulder_mid_z_m": -0.1858,
+        "shoulder_mid_y_minus_hip_mid_y_m": -0.4727,
+        "shoulder_mid_y_minus_nose_y_m": 0.1823
+      },
+      "pose_first_frame_ms": {
+        "lite": 43.6,
+        "full": 49.6
+      },
+      "num_hands": 2,
+      "hand_first_frame_ms": 50.3,
+      "hands": [
+        {
+          "hand_index": 0,
+          "handedness_label": "Left",
+          "handedness_score": 0.9577,
+          "landmark_count": 21,
+          "fingers": {
+            "thumb": {
+              "total_flexion_deg": 17.1,
+              "joint_interior_deg": {
+                "mcp": 171.6,
+                "ip": 171.3
+              },
+              "2d_total_flexion_deg": 11.2,
+              "state_rule_30_110": "extended"
+            },
+            "index": {
+              "total_flexion_deg": 51.2,
+              "joint_interior_deg": {
+                "pip": 147.6,
+                "dip": 161.1
+              },
+              "2d_total_flexion_deg": 3.0,
+              "state_rule_30_110": "partial"
+            },
+            "middle": {
+              "total_flexion_deg": 52.4,
+              "joint_interior_deg": {
+                "pip": 154.2,
+                "dip": 153.4
+              },
+              "2d_total_flexion_deg": 3.1,
+              "state_rule_30_110": "partial"
+            },
+            "ring": {
+              "total_flexion_deg": 42.2,
+              "joint_interior_deg": {
+                "pip": 162.1,
+                "dip": 155.6
+              },
+              "2d_total_flexion_deg": 2.7,
+              "state_rule_30_110": "partial"
+            },
+            "pinky": {
+              "total_flexion_deg": 36.6,
+              "joint_interior_deg": {
+                "pip": 167.6,
+                "dip": 155.8
+              },
+              "2d_total_flexion_deg": 0.9,
+              "state_rule_30_110": "partial"
+            }
+          },
+          "world_xyz_sample_m": {
+            "wrist_0": [
+              0.0601,
+              -0.0061,
+              0.0311
+            ],
+            "middle_mcp_9": [
+              -0.0011,
+              0.0014,
+              -0.0005
+            ],
+            "middle_tip_12": [
+              -0.0706,
+              0.0002,
+              0.0329
+            ]
+          }
+        },
+        {
+          "hand_index": 1,
+          "handedness_label": "Right",
+          "handedness_score": 0.9365,
+          "landmark_count": 21,
+          "fingers": {
+            "thumb": {
+              "total_flexion_deg": 27.2,
+              "joint_interior_deg": {
+                "mcp": 170.4,
+                "ip": 162.4
+              },
+              "2d_total_flexion_deg": 8.8,
+              "state_rule_30_110": "extended"
+            },
+            "index": {
+              "total_flexion_deg": 55.0,
+              "joint_interior_deg": {
+                "pip": 172.4,
+                "dip": 132.6
+              },
+              "2d_total_flexion_deg": 8.4,
+              "state_rule_30_110": "partial"
+            },
+            "middle": {
+              "total_flexion_deg": 40.0,
+              "joint_interior_deg": {
+                "pip": 154.5,
+                "dip": 165.5
+              },
+              "2d_total_flexion_deg": 13.6,
+              "state_rule_30_110": "partial"
+            },
+            "ring": {
+              "total_flexion_deg": 30.4,
+              "joint_interior_deg": {
+                "pip": 158.4,
+                "dip": 171.2
+              },
+              "2d_total_flexion_deg": 12.3,
+              "state_rule_30_110": "partial"
+            },
+            "pinky": {
+              "total_flexion_deg": 34.9,
+              "joint_interior_deg": {
+                "pip": 160.9,
+                "dip": 164.2
+              },
+              "2d_total_flexion_deg": 6.8,
+              "state_rule_30_110": "partial"
+            }
+          },
+          "world_xyz_sample_m": {
+            "wrist_0": [
+              0.047,
+              -0.0562,
+              0.0473
+            ],
+            "middle_mcp_9": [
+              -0.0041,
+              0.0033,
+              0.0033
+            ],
+            "middle_tip_12": [
+              -0.0437,
+              0.0515,
+              -0.0561
+            ]
+          }
+        }
+      ]
+    },
+    "right_hands.jpg": {
+      "file": "right_hands.jpg",
+      "file_bytes": 54887,
+      "width": 720,
+      "height": 382,
+      "pose_lite": {
+        "pose_model": "pose_landmarker_lite.task",
+        "num_poses": 0,
+        "detected": false
+      },
+      "pose_full": {
+        "pose_model": "pose_landmarker_full.task",
+        "num_poses": 0,
+        "detected": false
+      },
+      "pose_first_frame_ms": {
+        "lite": 22.3,
+        "full": 22.9
+      },
+      "num_hands": 2,
+      "hand_first_frame_ms": 51.1,
+      "hands": [
+        {
+          "hand_index": 0,
+          "handedness_label": "Right",
+          "handedness_score": 0.9433,
+          "landmark_count": 21,
+          "fingers": {
+            "thumb": {
+              "total_flexion_deg": 32.5,
+              "joint_interior_deg": {
+                "mcp": 169.5,
+                "ip": 158.0
+              },
+              "2d_total_flexion_deg": 20.6,
+              "state_rule_30_110": "partial"
+            },
+            "index": {
+              "total_flexion_deg": 28.8,
+              "joint_interior_deg": {
+                "pip": 158.4,
+                "dip": 172.9
+              },
+              "2d_total_flexion_deg": 3.5,
+              "state_rule_30_110": "extended"
+            },
+            "middle": {
+              "total_flexion_deg": 25.8,
+              "joint_interior_deg": {
+                "pip": 170.0,
+                "dip": 164.3
+              },
+              "2d_total_flexion_deg": 0.7,
+              "state_rule_30_110": "extended"
+            },
+            "ring": {
+              "total_flexion_deg": 21.4,
+              "joint_interior_deg": {
+                "pip": 176.6,
+                "dip": 162.1
+              },
+              "2d_total_flexion_deg": 1.2,
+              "state_rule_30_110": "extended"
+            },
+            "pinky": {
+              "total_flexion_deg": 42.3,
+              "joint_interior_deg": {
+                "pip": 160.6,
+                "dip": 157.1
+              },
+              "2d_total_flexion_deg": 0.5,
+              "state_rule_30_110": "partial"
+            }
+          },
+          "world_xyz_sample_m": {
+            "wrist_0": [
+              0.0129,
+              0.0605,
+              0.0396
+            ],
+            "middle_mcp_9": [
+              -0.0022,
+              -0.0014,
+              -0.0009
+            ],
+            "middle_tip_12": [
+              -0.0165,
+              -0.0855,
+              0.007
+            ]
+          }
+        },
+        {
+          "hand_index": 1,
+          "handedness_label": "Right",
+          "handedness_score": 0.9606,
+          "landmark_count": 21,
+          "fingers": {
+            "thumb": {
+              "total_flexion_deg": 29.3,
+              "joint_interior_deg": {
+                "mcp": 174.4,
+                "ip": 156.3
+              },
+              "2d_total_flexion_deg": 20.2,
+              "state_rule_30_110": "extended"
+            },
+            "index": {
+              "total_flexion_deg": 37.3,
+              "joint_interior_deg": {
+                "pip": 152.9,
+                "dip": 169.8
+              },
+              "2d_total_flexion_deg": 3.0,
+              "state_rule_30_110": "partial"
+            },
+            "middle": {
+              "total_flexion_deg": 32.9,
+              "joint_interior_deg": {
+                "pip": 163.9,
+                "dip": 163.1
+              },
+              "2d_total_flexion_deg": 0.6,
+              "state_rule_30_110": "partial"
+            },
+            "ring": {
+              "total_flexion_deg": 18.8,
+              "joint_interior_deg": {
+                "pip": 176.4,
+                "dip": 164.8
+              },
+              "2d_total_flexion_deg": 1.3,
+              "state_rule_30_110": "extended"
+            },
+            "pinky": {
+              "total_flexion_deg": 37.5,
+              "joint_interior_deg": {
+                "pip": 158.6,
+                "dip": 163.9
+              },
+              "2d_total_flexion_deg": 0.4,
+              "state_rule_30_110": "partial"
+            }
+          },
+          "world_xyz_sample_m": {
+            "wrist_0": [
+              -0.0123,
+              -0.057,
+              0.0429
+            ],
+            "middle_mcp_9": [
+              0.0018,
+              0.0012,
+              -0.0015
+            ],
+            "middle_tip_12": [
+              0.0169,
+              0.0817,
+              0.0127
+            ]
+          }
+        }
+      ]
+    },
+    "left_hands.jpg": {
+      "file": "left_hands.jpg",
+      "file_bytes": 54888,
+      "width": 720,
+      "height": 382,
+      "pose_lite": {
+        "pose_model": "pose_landmarker_lite.task",
+        "num_poses": 0,
+        "detected": false
+      },
+      "pose_full": {
+        "pose_model": "pose_landmarker_full.task",
+        "num_poses": 0,
+        "detected": false
+      },
+      "pose_first_frame_ms": {
+        "lite": 20.6,
+        "full": 22.8
+      },
+      "num_hands": 2,
+      "hand_first_frame_ms": 50.9,
+      "hands": [
+        {
+          "hand_index": 0,
+          "handedness_label": "Left",
+          "handedness_score": 0.9679,
+          "landmark_count": 21,
+          "fingers": {
+            "thumb": {
+              "total_flexion_deg": 40.3,
+              "joint_interior_deg": {
+                "mcp": 156.6,
+                "ip": 163.1
+              },
+              "2d_total_flexion_deg": 23.6,
+              "state_rule_30_110": "partial"
+            },
+            "index": {
+              "total_flexion_deg": 88.9,
+              "joint_interior_deg": {
+                "pip": 111.0,
+                "dip": 160.1
+              },
+              "2d_total_flexion_deg": 3.1,
+              "state_rule_30_110": "partial"
+            },
+            "middle": {
+              "total_flexion_deg": 34.2,
+              "joint_interior_deg": {
+                "pip": 172.2,
+                "dip": 153.6
+              },
+              "2d_total_flexion_deg": 3.2,
+              "state_rule_30_110": "partial"
+            },
+            "ring": {
+              "total_flexion_deg": 53.2,
+              "joint_interior_deg": {
+                "pip": 149.2,
+                "dip": 157.6
+              },
+              "2d_total_flexion_deg": 2.4,
+              "state_rule_30_110": "partial"
+            },
+            "pinky": {
+              "total_flexion_deg": 33.4,
+              "joint_interior_deg": {
+                "pip": 167.6,
+                "dip": 159.0
+              },
+              "2d_total_flexion_deg": 5.7,
+              "state_rule_30_110": "partial"
+            }
+          },
+          "world_xyz_sample_m": {
+            "wrist_0": [
+              0.0105,
+              -0.0431,
+              0.0317
+            ],
+            "middle_mcp_9": [
+              0.0019,
+              0.0024,
+              -0.0009
+            ],
+            "middle_tip_12": [
+              -0.0011,
+              0.0688,
+              0.0193
+            ]
+          }
+        },
+        {
+          "hand_index": 1,
+          "handedness_label": "Left",
+          "handedness_score": 0.9562,
+          "landmark_count": 21,
+          "fingers": {
+            "thumb": {
+              "total_flexion_deg": 53.4,
+              "joint_interior_deg": {
+                "mcp": 154.9,
+                "ip": 151.7
+              },
+              "2d_total_flexion_deg": 19.5,
+              "state_rule_30_110": "partial"
+            },
+            "index": {
+              "total_flexion_deg": 91.2,
+              "joint_interior_deg": {
+                "pip": 105.5,
+                "dip": 163.3
+              },
+              "2d_total_flexion_deg": 5.0,
+              "state_rule_30_110": "partial"
+            },
+            "middle": {
+              "total_flexion_deg": 29.6,
+              "joint_interior_deg": {
+                "pip": 173.1,
+                "dip": 157.2
+              },
+              "2d_total_flexion_deg": 2.0,
+              "state_rule_30_110": "extended"
+            },
+            "ring": {
+              "total_flexion_deg": 52.9,
+              "joint_interior_deg": {
+                "pip": 147.0,
+                "dip": 160.1
+              },
+              "2d_total_flexion_deg": 3.8,
+              "state_rule_30_110": "partial"
+            },
+            "pinky": {
+              "total_flexion_deg": 28.8,
+              "joint_interior_deg": {
+                "pip": 161.5,
+                "dip": 169.7
+              },
+              "2d_total_flexion_deg": 2.9,
+              "state_rule_30_110": "extended"
+            }
+          },
+          "world_xyz_sample_m": {
+            "wrist_0": [
+              -0.0137,
+              0.0431,
+              0.0315
+            ],
+            "middle_mcp_9": [
+              -0.0024,
+              -0.0024,
+              -0.0008
+            ],
+            "middle_tip_12": [
+              0.0034,
+              -0.0677,
+              0.016
+            ]
+          }
+        }
+      ]
+    },
+    "fist.png": {
+      "file": "fist.png",
+      "file_bytes": 207870,
+      "width": 358,
+      "height": 354,
+      "pose_lite": {
+        "pose_model": "pose_landmarker_lite.task",
+        "num_poses": 0,
+        "detected": false
+      },
+      "pose_full": {
+        "pose_model": "pose_landmarker_full.task",
+        "num_poses": 0,
+        "detected": false
+      },
+      "pose_first_frame_ms": {
+        "lite": 19.9,
+        "full": 23.2
+      },
+      "num_hands": 1,
+      "hand_first_frame_ms": 38.6,
+      "hands": [
+        {
+          "hand_index": 0,
+          "handedness_label": "Right",
+          "handedness_score": 0.989,
+          "landmark_count": 21,
+          "fingers": {
+            "thumb": {
+              "total_flexion_deg": 109.4,
+              "joint_interior_deg": {
+                "mcp": 141.7,
+                "ip": 108.8
+              },
+              "2d_total_flexion_deg": 126.6,
+              "state_rule_30_110": "partial"
+            },
+            "index": {
+              "total_flexion_deg": 167.8,
+              "joint_interior_deg": {
+                "pip": 79.3,
+                "dip": 112.9
+              },
+              "2d_total_flexion_deg": 189.2,
+              "state_rule_30_110": "curled"
+            },
+            "middle": {
+              "total_flexion_deg": 194.8,
+              "joint_interior_deg": {
+                "pip": 83.2,
+                "dip": 82.0
+              },
+              "2d_total_flexion_deg": 198.4,
+              "state_rule_30_110": "curled"
+            },
+            "ring": {
+              "total_flexion_deg": 168.1,
+              "joint_interior_deg": {
+                "pip": 93.3,
+                "dip": 98.7
+              },
+              "2d_total_flexion_deg": 204.1,
+              "state_rule_30_110": "curled"
+            },
+            "pinky": {
+              "total_flexion_deg": 175.4,
+              "joint_interior_deg": {
+                "pip": 106.2,
+                "dip": 78.5
+              },
+              "2d_total_flexion_deg": 191.7,
+              "state_rule_30_110": "curled"
+            }
+          },
+          "world_xyz_sample_m": {
+            "wrist_0": [
+              -0.0083,
+              0.0815,
+              0.0034
+            ],
+            "middle_mcp_9": [
+              0.0015,
+              -0.0047,
+              0.0058
+            ],
+            "middle_tip_12": [
+              0.0143,
+              0.0116,
+              -0.0038
+            ]
+          }
+        }
+      ]
+    },
+    "woman_hands.jpg": {
+      "file": "woman_hands.jpg",
+      "file_bytes": 67719,
+      "width": 640,
+      "height": 960,
+      "pose_lite": {
+        "pose_model": "pose_landmarker_lite.task",
+        "num_poses": 1,
+        "detected": true,
+        "landmark_count": 33,
+        "normalized_xyz_sample": {
+          "0": [
+            0.5295,
+            0.5161,
+            -0.5253
+          ],
+          "11": [
+            0.5112,
+            0.5656,
+            -0.4351
+          ],
+          "12": [
+            0.4852,
+            0.5126,
+            -0.3529
+          ],
+          "23": [
+            0.3617,
+            0.5667,
+            -0.0223
+          ],
+          "24": [
+            0.3578,
+            0.5465,
+            0.022
+          ]
+        },
+        "world_xyz_sample_m": {
+          "0": [
+            0.1949,
+            -0.0911,
+            -0.4919
+          ],
+          "11": [
+            0.2091,
+            0.015,
+            -0.392
+          ],
+          "12": [
+            0.1662,
+            -0.1147,
+            -0.3398
+          ],
+          "23": [
+            -0.0002,
+            0.0318,
+            -0.0143
+          ],
+          "24": [
+            0.0009,
+            -0.0329,
+            0.015
+          ]
+        },
+        "nose_z_minus_shoulder_mid_z_m": -0.126,
+        "shoulder_mid_y_minus_hip_mid_y_m": -0.0493,
+        "shoulder_mid_y_minus_nose_y_m": 0.0412
+      },
+      "pose_full": {
+        "pose_model": "pose_landmarker_full.task",
+        "num_poses": 0,
+        "detected": false
+      },
+      "pose_first_frame_ms": {
+        "lite": 42.8,
+        "full": 49.8
+      },
+      "num_hands": 2,
+      "hand_first_frame_ms": 53.6,
+      "hands": [
+        {
+          "hand_index": 0,
+          "handedness_label": "Left",
+          "handedness_score": 0.936,
+          "landmark_count": 21,
+          "fingers": {
+            "thumb": {
+              "total_flexion_deg": 18.2,
+              "joint_interior_deg": {
+                "mcp": 173.2,
+                "ip": 168.6
+              },
+              "2d_total_flexion_deg": 14.1,
+              "state_rule_30_110": "extended"
+            },
+            "index": {
+              "total_flexion_deg": 56.3,
+              "joint_interior_deg": {
+                "pip": 158.7,
+                "dip": 145.0
+              },
+              "2d_total_flexion_deg": 15.5,
+              "state_rule_30_110": "partial"
+            },
+            "middle": {
+              "total_flexion_deg": 37.6,
+              "joint_interior_deg": {
+                "pip": 144.1,
+                "dip": 178.2
+              },
+              "2d_total_flexion_deg": 16.1,
+              "state_rule_30_110": "partial"
+            },
+            "ring": {
+              "total_flexion_deg": 35.3,
+              "joint_interior_deg": {
+                "pip": 155.1,
+                "dip": 169.6
+              },
+              "2d_total_flexion_deg": 19.2,
+              "state_rule_30_110": "partial"
+            },
+            "pinky": {
+              "total_flexion_deg": 57.1,
+              "joint_interior_deg": {
+                "pip": 158.8,
+                "dip": 144.1
+              },
+              "2d_total_flexion_deg": 18.6,
+              "state_rule_30_110": "partial"
+            }
+          },
+          "world_xyz_sample_m": {
+            "wrist_0": [
+              0.0867,
+              0.0146,
+              -0.0306
+            ],
+            "middle_mcp_9": [
+              -0.0036,
+              0.0032,
+              0.0086
+            ],
+            "middle_tip_12": [
+              -0.0834,
+              0.0244,
+              -0.0324
+            ]
+          }
+        },
+        {
+          "hand_index": 1,
+          "handedness_label": "Right",
+          "handedness_score": 0.9622,
+          "landmark_count": 21,
+          "fingers": {
+            "thumb": {
+              "total_flexion_deg": 73.9,
+              "joint_interior_deg": {
+                "mcp": 148.4,
+                "ip": 137.8
+              },
+              "2d_total_flexion_deg": 64.3,
+              "state_rule_30_110": "partial"
+            },
+            "index": {
+              "total_flexion_deg": 57.5,
+              "joint_interior_deg": {
+                "pip": 173.6,
+                "dip": 128.9
+              },
+              "2d_total_flexion_deg": 8.3,
+              "state_rule_30_110": "partial"
+            },
+            "middle": {
+              "total_flexion_deg": 44.9,
+              "joint_interior_deg": {
+                "pip": 150.3,
+                "dip": 164.7
+              },
+              "2d_total_flexion_deg": 3.9,
+              "state_rule_30_110": "partial"
+            },
+            "ring": {
+              "total_flexion_deg": 44.3,
+              "joint_interior_deg": {
+                "pip": 144.0,
+                "dip": 171.7
+              },
+              "2d_total_flexion_deg": 5.5,
+              "state_rule_30_110": "partial"
+            },
+            "pinky": {
+              "total_flexion_deg": 37.9,
+              "joint_interior_deg": {
+                "pip": 162.2,
+                "dip": 159.9
+              },
+              "2d_total_flexion_deg": 15.1,
+              "state_rule_30_110": "partial"
+            }
+          },
+          "world_xyz_sample_m": {
+            "wrist_0": [
+              -0.0826,
+              0.0032,
+              -0.0257
+            ],
+            "middle_mcp_9": [
+              0.0053,
+              0.0018,
+              0.0086
+            ],
+            "middle_tip_12": [
+              0.0716,
+              0.0017,
+              -0.0416
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "_last_stage": "done",
+  "video_mode_timestamp_test": {
+    "frames": [
+      {
+        "ts_ms": 0,
+        "num_poses": 1
+      },
+      {
+        "ts_ms": 33,
+        "num_poses": 1
+      },
+      {
+        "ts_ms": 66,
+        "num_poses": 1
+      }
+    ],
+    "violations": [
+      {
+        "ts_ms": 33,
+        "error": "ValueError: Input timestamp must be monotonically increasing."
+      },
+      {
+        "ts_ms": 10,
+        "error": "ValueError: Input timestamp must be monotonically increasing."
+      }
+    ]
+  },
+  "benchmarks_image_mode": {
+    "640x480": {
+      "input": "640x480",
+      "pose_lite_image": {
+        "n": 15,
+        "mean_ms": 45.16,
+        "median_ms": 45.08,
+        "std_ms": 1.71,
+        "p95_ms": 48.23,
+        "min_ms": 42.84,
+        "max_ms": 48.43
+      },
+      "pose_full_image": {
+        "n": 15,
+        "mean_ms": 52.5,
+        "median_ms": 52.25,
+        "std_ms": 1.44,
+        "p95_ms": 55.09,
+        "min_ms": 50.68,
+        "max_ms": 55.31
+      },
+      "hand_image": {
+        "n": 15,
+        "mean_ms": 53.21,
+        "median_ms": 53.22,
+        "std_ms": 1.53,
+        "p95_ms": 55.54,
+        "min_ms": 50.8,
+        "max_ms": 55.96
+      }
+    },
+    "1280x720": {
+      "input": "1280x720",
+      "pose_lite_image": {
+        "n": 15,
+        "mean_ms": 44.39,
+        "median_ms": 44.29,
+        "std_ms": 0.77,
+        "p95_ms": 45.42,
+        "min_ms": 43.3,
+        "max_ms": 45.95
+      },
+      "pose_full_image": {
+        "n": 15,
+        "mean_ms": 52.66,
+        "median_ms": 52.8,
+        "std_ms": 1.67,
+        "p95_ms": 53.83,
+        "min_ms": 50.77,
+        "max_ms": 56.96
+      },
+      "hand_image": {
+        "n": 15,
+        "mean_ms": 53.76,
+        "median_ms": 53.61,
+        "std_ms": 1.06,
+        "p95_ms": 54.88,
+        "min_ms": 52.53,
+        "max_ms": 56.6
+      }
+    }
+  }
+}
