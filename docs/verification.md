@@ -1,6 +1,8 @@
 # 验证方案与记录
 
-## 1. 验收标准（阶段一）
+## 1. 验收标准
+
+### 阶段一（躯干 + 五指）
 
 | 编号 | 验收项 | 通过标准 |
 | --- | --- | --- |
@@ -11,16 +13,26 @@
 | A5 | 工程交付 | git 仓库干净可提交；README/迁移文档完整；测试可一条命令跑通 |
 | A6 | 可扩展性 | 阈值/标签可配置；custom_rules.py 可覆盖定义 |
 
+### 阶段二（A/B 分区 + 切菜节奏 + 活动状态）
+
+| 编号 | 验收项 | 通过标准 |
+| --- | --- | --- |
+| A7 | A/B 操作区 | 一条可配置左右分割线；身体重心判区；死区/EMA/确认防抖；预览镜像方向一致；配置可保存并在重启后生效 |
+| A8 | 切菜节奏与活动状态 | 只有切菜节奏才进 ACTIVE_A/B；普通移动为 MOVING；停手为 PAUSED；A↔B 有 TRANSITION；手遮挡/离开有 OCCLUDED/AWAY；状态与事件有单测/场景回放证据 |
+| A9 | 事件与界面 | 事件写入 JSONL 且 UI 可查看；分区设置对话框可用；快照 schema 1.1 完整；不新增依赖 |
+
 ## 2. 自动化验证
 
 ```powershell
 $env:PYTHONPATH="$PWD\src"
 # 模型完整性
 py -3.12 -X utf8 -m kitchen_perception verify-models
-# 单元/集成测试（无需摄像头）
+# 单元/集成测试（无需摄像头，92 项）
 py -3.12 -X utf8 tests/run_tests.py -v
 # 静态图片端到端
 py -3.12 -X utf8 -m kitchen_perception snapshot --image assets/test/official/pose.jpg --json outputs/snapshots/verify_pose.json --overlay outputs/debug/verify_pose.jpg
+# 活动状态机场景回放（不需要摄像头）
+py -3.12 -X utf8 -m kitchen_perception simulate --scenario a_to_b --json outputs/simulate_a_to_b.json
 # 延迟实测（需要摄像头，运行时不要开其它摄像头程序）
 py -3.12 -X utf8 -m kitchen_perception benchmark --frames 300 --json outputs/benchmark.json
 ```
@@ -30,38 +42,83 @@ py -3.12 -X utf8 -m kitchen_perception benchmark --frames 300 --json outputs/ben
 
 ## 3. 手工验证（演示机）
 
+### 3.1 阶段一
+
 1. 站/坐在摄像头前，确认躯干标签正确：直立站立 → 前倾 → 后仰 → 侧倾 → 俯身（每次保持 2 秒）
 2. 手伸到画面里，依次做：五指张开、握拳、食指指向、拇指食指捏取；确认面板与叠加颜色变化
 3. 打开“标定直立基准”后再站立，确认前倾角归零
 4. 快速挥动手，确认不崩溃、延迟不超 500 ms，必要时观察降级级别
 5. 拔掉摄像头再插回，确认能自动重连或给出明确错误提示
 
+### 3.2 阶段二
+
+1. 打开 UI，点“分区设置…”，把分割线拖到画面中央附近，点“应用”看到 A/B 半透明底色变化；
+   点“保存到配置文件”后重启 UI，确认分割线位置保持
+2. 站在画面左半边做切菜动作（手臂上下往复，约 2 Hz），观察右侧“情境感知”出现“A 区切菜”
+3. 换到右半边继续切，观察状态经“转移中”进入“B 区切菜”，事件日志出现区域转移事件
+4. 停止切菜但手留在画面内，约 2 秒后显示“暂停”；普通移动手但不做切菜节奏，显示“移动”
+5. 用身体或布遮住手约 1 秒，显示“手部遮挡”；离开画面约 5 秒，显示“用户离开”，回来后显示“继续观察”
+6. 检查 `outputs/events/*.jsonl` 每行是一条带时间戳的 JSON 事件；关闭/重开 UI 不报错
+
+> 阶段二的“切菜/活动”准确率目前只经过合成观测序列与空场景 smoke，**真人切菜准确率仍需在
+> 演示机上按上述步骤复核**。这不是自动化测试能替代的，报告中应如实标注。
+
 ## 4. 当前记录（开发机实测）
 
 | 项目 | 结果 | 备注 |
 | --- | --- | --- |
 | 模型 sha256 校验 | 通过 | 3 个模型与 MANIFEST 一致 |
-| unittest | **52 项全部通过**（2026-11-10，10.5 s） | 几何/配置/躯干/手指/预算/序列化/视频源/集成/CLI；用 tests/run_tests.py；含 T5 后补的二次标定/滞回/降级窗口/缺键兜底用例 |
+| unittest（阶段一） | 52 项通过（2026-11-10，10.5 s） | 几何/配置/躯干/手指/预算/序列化/视频源/集成/CLI |
+| unittest（阶段二） | **92 项通过**（2026-11-11，10.8 s） | 新增 zones 14 / motion 7 / activity 10 / events 4 / simulate 4 / 躯干角度门限 1；全部无摄像头 |
 | 单帧处理延迟（640×480，lite） | p50 ≈ 64 ms / p95 ≈ 71 ms / max ≈ 73 ms | 姿态+手部+分析，未含 UI 绘制 |
-| 摄像头 benchmark（2026-11-10，120 帧） | p50 62.4 ms / p95 82.4 ms / max 90.9 ms，verdict PASS，L0 | outputs/benchmark.json；目标 p95≤250、硬上限 500 |
-| T5 独立验证 benchmark（2026-11-10，120 帧，verifier 独占摄像头） | p50 47.95 ms / p95 65.86 ms / max 70.81 ms，verdict PASS，L0 | outputs/verify_t5/benchmark.json；报告 docs/verification_report.md |
-| UI 摄像头自测（ui-builder，15 s） | 155 帧、FPS 16.2、p95 52 ms、L0、躯干「前倾」置信度 0.61 | 见 docs/ui_notes.md §5.2 |
-| UI 关闭退出（Lead 实测） | 窗口立即关闭，进程约 4.7 s 退出 | 真实 `python -m kitchen_perception ui` + WM_CLOSE，无 40 s 卡顿 |
-| 摄像头帧率 | 约 15–18 FPS | 受曝光/环境光影响 |
-| 官方图片五指分类（端到端 snapshot） | fist.png → grip=fist（五指全 flexed）；right_hands.jpg → open（五指全 extended）；woman_hands.jpg → 左手 partial（拇指 partial、四指 extended）/ 右手 pinch | 产物 outputs/snapshots/{fist,right_hands,woman_hands}.json |
-| MediaPipe 退出阻塞 | 单实例 close 从约 44 s 降到约 1.5 s 上限；全套测试 254 s → 10.6 s | 非阻塞 close + 入口 os._exit |
+| 摄像头 benchmark（阶段一） | p50 62.4 ms / p95 82.4 ms / max 90.9 ms，PASS，L0 | outputs/benchmark.json |
+| 摄像头 benchmark（阶段二，2026-11-11） | **p50 45.52 ms / p95 69.79 ms / max 72.25 ms，PASS，L0**，FPS 11.87 | outputs/benchmark_v2.json；目标 p95≤250、硬上限 500 |
+| UI smoke（阶段二，空场景，2026-11-11） | 42 帧、面板更新 21 次、latest_age 15 ms、worker 存活、分区对话框可开可关 | outputs/ui_smoke/；截图 ui_smoke.png；空场景无人属预期 |
+| 活动场景回放 | 8 个场景均通过 | `simulate` 子命令；详见 `5`、outputs/simulate_*.json |
+| 官方图片五指分类 | fist→fist；right_hands→open；woman_hands→左手 partial / 右手 pinch | 阶段一产物 outputs/snapshots/*.json |
+| UI 关闭退出 | 窗口立即关闭，进程约 4.7 s 退出 | 非阻塞 close + 入口 os._exit，无 40 s 卡顿 |
+| 空场景误检门限 | 修复前挂衣被判“后仰”（pitch −169°）；修复后 uncertain，活动 UNKNOWN | torso.py 的 plausible_pitch/roll_deg；新增单测 |
+| T5 独立验证（阶段一） | “有条件通过”，S2-1/S2-2 已修复并回归 | docs/verification_report.md |
 
 > 注：本机实测时若另一个进程占用摄像头，read 会阻塞约 1 s/帧，导致 wall-clock FPS 降低但不影响单帧处理耗时统计；跑 benchmark 前请关闭其它用摄像头的程序。
 
-## 5. 验收对照（2026-11-10）
+## 5. 阶段二场景回放证据
 
-T5 独立验证已完成（verifier，2026-11-10）：结论“有条件通过”，详见 docs/verification_report.md；下表为综合 Lead 自测与 T5 复核后的证据。
+`simulate` 用 `ActivityStateMachine` 合成观测（不调用摄像头、不依赖 MediaPipe），验证状态机分支：
+
+| 场景 | 关键期望 | 结果 |
+| --- | --- | --- |
+| chop_a | 进入 ACTIVE_A，发 ACTIVITY_A_STARTED / CHOPPING_STARTED | 通过 |
+| chop_b | 进入 ACTIVE_B | 通过 |
+| a_to_b | ACTIVE_A → TRANSITION_A_TO_B → ACTIVE_B，转移事件各 1 次 | 通过 |
+| pause | ACTIVE_A 后停手 → PAUSED | 通过 |
+| moving | 手可见、普通移动 → MOVING（不是 ACTIVE） | 通过 |
+| occluded | 人可见、无手 → OCCLUDED，且不误报 ACTIVITY_PAUSED | 通过 |
+| away_return | 离开 6 s → AWAY，回来 → USER_RETURNED，最终 PAUSED | 通过 |
+| no_person | 无人 6 s → AWAY，不误报 HAND_OCCLUDED | 通过 |
+
+## 6. 验收对照（2026-11-11）
 
 | 编号 | 当前状态 | 证据 |
 | --- | --- | --- |
-| A1 摄像头调用 | 通过（Lead 实测） | probe-cameras 列出 index 0；UI 15 s 155 帧；断线重连有单测 |
-| A2 躯干识别 | 通过（静态图 + UI 实测） | pose.jpg upright 0.90；UI 实时「前倾」0.61；单测覆盖 5 状态 + 滞回；风险：近景特写构图可能误判（报告 S2-3，已写入 README 已知限制） |
-| A3 五指识别 | 通过（官方图端到端） | fist→fist、right_hands→open、woman_hands→partial/pinch；52 项单测 |
-| A4 实时性 | 通过 | benchmark 120 帧 p95 82.4 ms（≤250）；UI p95 52 ms |
-| A5 工程交付 | 通过（T5 复核） | git 已提交；verify_all.ps1 全通过；便携包 18.83 MiB；52 项测试 10.5 s |
+| A1 摄像头调用 | 通过（Lead 实测） | probe-cameras 列出 index 0；UI smoke 42 帧；断线重连有单测 |
+| A2 躯干识别 | 通过（静态图 + UI 实测） | pose.jpg upright；单测覆盖 5 状态 + 滞回；近景特写构图风险已写入已知限制 |
+| A3 五指识别 | 通过（官方图端到端） | fist→fist、right_hands→open、woman_hands→partial/pinch；单测覆盖五指枚举 |
+| A4 实时性 | 通过 | 阶段二 benchmark p95 69.79 ms（≤250）；UI smoke p95 约 71 ms |
+| A5 工程交付 | 通过 | git 提交；verify_all.ps1；便携包；92 项测试 10.8 s |
 | A6 可扩展性 | 通过 | config/default.json 阈值/标签；custom_rules.py 钩子 + 单测 |
+| A7 A/B 分区 | 通过（单测 + UI 对话框 smoke） | test_zones 14 项；分区设置保存/重读；镜像坐标单测 |
+| A8 切菜/活动状态 | 通过（合成场景；真人待复核） | test_motion 7 项、test_activity 10 项、test_simulate 4 项；8 场景回放 |
+| A9 事件与界面 | 通过 | JSONL 单测 4 项；UI 事件日志 smoke；快照 schema 1.1 字段齐全 |
+
+## 7. 已知限制与待复核项
+
+1. **真人切菜准确率待复核**：切菜节奏阈值（频率/振幅/稳定性）来自合成轨迹与经验值，尚无真人样本统计。
+2. **A/B 只按身体重心**：不做鼠标框选矩形、不做多边形；身体重心贴近分割线时依赖死区与确认时间。
+3. **活动状态是粗粒度**：只回答在哪个区、是否在切、是否暂停/移动/遮挡/离开，不识别洗、盛、调味等具体步骤。
+4. **单人假设**：多人入镜时取置信度最高的人，不保证区分。
+5. **空场景误检**：已加角度可信范围门限，但极端挂衣/海报仍可能被斜向判为人体。
+6. **摄像头独占**：同一摄像头同一时间只能被一个进程稳定读取。
+7. **离线遥测**：MediaPipe 退出时会尝试上传 Clearcut，已用非阻塞 close + `os._exit` 规避。
+8. **性能与分辨率**：640×480 CPU 实测 p95 约 70 ms；换更高分辨率或更慢的演示机时，程序会自动降级，必要时调整 `config/default.json` 的 `latency.levels`。
+9. **UI 自适应**：窗口会按屏幕分辨率收缩，但 1280×800 以下屏幕右侧面板可能需要滚动；演示机建议 1366×768 以上。

@@ -5,8 +5,9 @@
 ## 1. 代码与模型
 
 - 仓库包含：`src/`、`config/`、`models/`（3 个 task 文件，约 23 MB）、`assets/test/official/`（官方测试图）、`scripts/`、`docs/`、`tests/`
-- 不包含：`outputs/`、`__pycache__`、虚拟环境
+- 不包含：`outputs/`（运行产物：快照、事件、benchmark）、`__pycache__`、虚拟环境、`scratch/`
 - `models/MANIFEST.json` 记录每个模型的 bytes/sha256/下载 URL；换机后可 `scripts/download_models.py` 重新下载并校验
+- 阶段二新增源码：`zones.py`、`motion.py`、`activity.py`、`events.py`；配置 `config/default.json` 增加 `zones/chopping/activity/logging` 段；用户分区配置写到 `config/zones.json`（可选，删除即恢复默认）
 
 ## 2. 目标机准备
 
@@ -26,7 +27,7 @@
    py -3.12 -X utf8 -m kitchen_perception verify-models
    py -3.12 -X utf8 scripts\check_env.py
    ```
-   测试请用 `py -3.12 -X utf8 tests\run_tests.py`（52 项，约 11 秒）。不要用 `python -m unittest` 直接跑全套：
+   测试请用 `py -3.12 -X utf8 tests\run_tests.py`（阶段二 **92 项，约 11 秒**）。不要用 `python -m unittest` 直接跑全套：
    MediaPipe 在离线网络下退出时会同步尝试上传遥测，每个 landmarker 会多等约 42 秒，虽然能跑完但很慢。
 5. 启动：
    ```powershell
@@ -52,6 +53,17 @@ git clone <仓库地址>; cd CSX_人体切菜检测
 py -3.12 -m pip install -r requirements.txt
 ```
 
+无网络或没有远端仓库时，可把仓库打成单文件备份：
+
+```powershell
+# 开发机
+git bundle create dist\CSX_kitchen_perception_repo.bundle --all
+# 演示机
+git clone dist\CSX_kitchen_perception_repo.bundle CSX_人体切菜检测
+```
+
+bundle 含全部提交历史（不含未跟踪的 `outputs/`）；与便携包互补：便携包可直接运行，bundle 便于继续开发。
+
 ## 5. 便携包方式（无网络）
 
 ```powershell
@@ -64,18 +76,22 @@ py -3.12 -m pip install -r requirements.txt
 
 ## 6. 环境差异与已知风险
 
-1. **CPU-only**：Windows 版 mediapipe pip wheel 不含 GPU delegate，`delegate=GPU` 会抛 NotImplementedError；性能按 CPU 规划（640×480 单帧 p95 约 66–82 ms）。
+1. **CPU-only**：Windows 版 mediapipe pip wheel 不含 GPU delegate，`delegate=GPU` 会抛 NotImplementedError；性能按 CPU 规划（640×480 单帧 p95 约 70–85 ms）。
 2. **离线遥测**：MediaPipe 原生库退出时会尝试上传 Clearcut 遥测；代码已用“非阻塞 close + 入口 `os._exit`”规避，检测本身不受影响。
 3. **摄像头独占**：同一摄像头同一时间只能被一个进程稳定读取；演示前关掉其它用摄像头的程序（含旧窗口）。
 4. **Python 版本**：只在 3.12.10 上实测；3.11 理论上可用但未实测，不建议演示机换版本。
 5. **编码**：`scripts/*.ps1` 以 UTF-8 BOM 保存，Windows PowerShell 5.1 才能正确解析中文注释。
+6. **分区配置**：`config/zones.json` 是用户运行产物，git 不跟踪；迁移时不带它就会用 `config/default.json` 的默认 `split_x=0.5`。若演示机需要固定分割线，可在 UI 里重新保存，或手动拷贝该文件。
+7. **屏幕分辨率**：UI 以 1280×900 为设计基准，实际窗口会按屏幕收缩；演示机建议 1366×768 以上。
 
 ## 7. 迁移后自检清单
 
 - [ ] `verify-models` 通过
 - [ ] `check_env.py` 显示摄像头可用、依赖版本正常
 - [ ] `snapshot --image assets/test/official/pose.jpg` 输出 posture 字段非空
-- [ ] `tests/run_tests.py` 52 项全部通过
+- [ ] `tests/run_tests.py` 92 项全部通过
 - [ ] `snapshot --image assets/test/official/fist.png` 输出 grip=fist
 - [ ] 打开 UI 能看到画面与实时状态
+- [ ] `simulate --scenario a_to_b` 输出 ACTIVE_A → TRANSITION_A_TO_B → ACTIVE_B
+- [ ] 打开“分区设置…”能改分割线并保存，重启后保持
 - [ ] `benchmark --frames 100` 的 p95 ≤ 500 ms（若超出，程序会自动降级，必要时在 config 调整 `latency.levels`）
