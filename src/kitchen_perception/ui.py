@@ -31,6 +31,7 @@ from .fingers import FINGER_ORDER, FINGER_ZH
 from .media_io import bgr_to_pil, ensure_dir, imwrite_u
 from .overlay import FACING_ZH
 from .worker import PerceptionWorker
+from .zones import ZoneSettings, save_settings, zones_file
 
 LOGGER = logging.getLogger(__name__)
 
@@ -62,6 +63,55 @@ POSTURE_COLORS = {
     "uncertain": "#8a6d00",
     "no_person": COLOR_UNKNOWN,
     "not_visible": COLOR_UNKNOWN,
+}
+
+ACTIVITY_COLORS = {
+    "ACTIVE_A": COLOR_OK,
+    "ACTIVE_B": COLOR_OK,
+    "MOVING": "#0b5cad",
+    "PAUSED": COLOR_PARTIAL,
+    "TRANSITION_A_TO_B": "#6a1b9a",
+    "TRANSITION_B_TO_A": "#6a1b9a",
+    "OCCLUDED": COLOR_PARTIAL,
+    "AWAY": COLOR_UNKNOWN,
+    "UNKNOWN": COLOR_UNKNOWN,
+}
+ACTIVITY_STATE_ZH = {
+    "UNKNOWN": "等待观察",
+    "ACTIVE_A": "A 区切菜中",
+    "ACTIVE_B": "B 区切菜中",
+    "MOVING": "手部移动（未见切菜节奏）",
+    "PAUSED": "暂停（未见切菜节奏）",
+    "TRANSITION_A_TO_B": "A→B 区域转移",
+    "TRANSITION_B_TO_A": "B→A 区域转移",
+    "OCCLUDED": "手部被遮挡/观察不足",
+    "AWAY": "暂未观察到用户",
+}
+QUALITY_ZH = {
+    "VALID": "有效",
+    "LOW": "偏低",
+    "OCCLUDED": "遮挡",
+    "NO_PERSON": "无人",
+    "UNKNOWN": "未知",
+}
+MOVEMENT_ZH = {"LOW": "低", "MEDIUM": "中", "HIGH": "高", "unknown": "未知"}
+EVENT_ZH = {
+    "SESSION_STARTED": "会话开始",
+    "ACTIVITY_A_STARTED": "A 区开始切菜",
+    "ACTIVITY_B_STARTED": "B 区开始切菜",
+    "ACTIVITY_PAUSED": "切菜暂停",
+    "HAND_MOVING": "手部移动",
+    "ZONE_TRANSITION_A_TO_B": "A→B 转移",
+    "ZONE_TRANSITION_B_TO_A": "B→A 转移",
+    "CHOPPING_STARTED": "切菜节奏开始",
+    "CHOPPING_STOPPED": "切菜节奏停止",
+    "CHOPPING_STABLE": "切菜节奏稳定",
+    "CHOPPING_UNSTABLE": "切菜节奏不稳",
+    "HAND_OCCLUDED": "手部遮挡",
+    "USER_AWAY": "暂未观察到用户",
+    "USER_RETURNED": "用户回到画面",
+    "CAMERA_DISCONNECTED": "摄像头断开",
+    "ZONE_CONFIG_CHANGED": "分区配置变更",
 }
 
 
@@ -111,11 +161,21 @@ class KitchenUI:
         self._startup_error: Optional[str] = None
         self._hand_blocks: list[dict] = []
         self._started_at = time.monotonic()
+        self._zone_dialog: Optional[tk.Toplevel] = None
+        self._zone_vars: dict[str, tk.StringVar] = {}
+        self._event_log_sig: Optional[tuple] = None
 
         self.root = tk.Tk()
         self.root.title(str(config.get("ui.title", "厨房情境感知 · 阶段一")))
-        self.root.geometry(f"{int(config.get('ui.width', 1180))}x{int(config.get('ui.height', 720))}")
-        self.root.minsize(940, 600)
+        # 演示机分辨率未知：窗口不超过屏幕可用区域，避免右侧面板/底部快捷键被裁掉。
+        window_width = min(
+            int(config.get("ui.width", 1280)), max(900, self.root.winfo_screenwidth() - 80)
+        )
+        window_height = min(
+            int(config.get("ui.height", 900)), max(650, self.root.winfo_screenheight() - 120)
+        )
+        self.root.geometry(f"{window_width}x{window_height}")
+        self.root.minsize(min(1000, window_width), min(700, window_height))
         self.root.configure(bg=BG)
         self.root.report_callback_exception = self._on_callback_exception
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -182,6 +242,52 @@ class KitchenUI:
         self.error_label.grid(row=row, column=0, sticky="ew", pady=(0, 6))
         self.error_label.grid_remove()
         row += 1
+
+        # 情境感知：活动状态 + 切菜节奏（阶段二核心面板）
+        activity_frame = self._group(panel, "情境感知")
+        activity_frame.grid(row=row, column=0, sticky="ew", pady=(0, 6))
+        row += 1
+        self.activity_label = tk.Label(
+            activity_frame,
+            text="等待观察",
+            font=self._font(18, "bold"),
+            fg=COLOR_UNKNOWN,
+            bg=BG_PANEL,
+            anchor="w",
+        )
+        self.activity_label.pack(fill="x", padx=6, pady=(2, 0))
+        self.activity_info_label = tk.Label(
+            activity_frame,
+            text="区域 --   持续 --   移动 --   质量 --",
+            font=self._font(10),
+            fg="#333333",
+            bg=BG_PANEL,
+            anchor="w",
+            justify="left",
+        )
+        self.activity_info_label.pack(fill="x", padx=6)
+        self.chopping_label = tk.Label(
+            activity_frame,
+            text="切菜：未检测到节奏",
+            font=self._font(10),
+            fg="#444444",
+            bg=BG_PANEL,
+            anchor="w",
+            justify="left",
+            wraplength=310,
+        )
+        self.chopping_label.pack(fill="x", padx=6)
+        self.last_event_label = tk.Label(
+            activity_frame,
+            text="最近事件：--",
+            font=self._font(9),
+            fg=COLOR_MUTED,
+            bg=BG_PANEL,
+            anchor="w",
+            justify="left",
+            wraplength=310,
+        )
+        self.last_event_label.pack(fill="x", padx=6, pady=(0, 3))
 
         # 躯干状态：大标签 + 置信度
         torso_frame = self._group(panel, "躯干状态")
@@ -257,6 +363,30 @@ class KitchenUI:
         )
         self.level_label.pack(fill="x", padx=6)
 
+        # 事件日志：显示最近确认事件，写入文件由 EventLogger 负责
+        log_frame = self._group(panel, "事件日志")
+        log_frame.grid(row=row, column=0, sticky="ew", pady=(0, 6))
+        row += 1
+        log_inner = tk.Frame(log_frame, bg=BG_PANEL)
+        log_inner.pack(fill="both", expand=True)
+        self.event_text = tk.Text(
+            log_inner,
+            height=6,
+            width=42,
+            font=self._font(9),
+            state="disabled",
+            wrap="none",
+            bg="#fbfbfb",
+            fg="#333333",
+            relief="flat",
+            padx=4,
+            pady=3,
+        )
+        event_scroll = tk.Scrollbar(log_inner, orient="vertical", command=self.event_text.yview)
+        self.event_text.configure(yscrollcommand=event_scroll.set)
+        self.event_text.pack(side="left", fill="both", expand=True)
+        event_scroll.pack(side="right", fill="y")
+
         # 按钮
         buttons = tk.Frame(panel, bg=BG)
         buttons.grid(row=row, column=0, sticky="ew", pady=(4, 2))
@@ -267,22 +397,30 @@ class KitchenUI:
             buttons, text="暂停", command=self._toggle_pause, font=self._font(10)
         )
         self.pause_button.grid(row=0, column=0, sticky="ew", padx=(0, 3), pady=2)
+        self.zone_button = tk.Button(
+            buttons, text="分区设置…", command=self._open_zone_dialog, font=self._font(10)
+        )
+        self.zone_button.grid(row=0, column=1, sticky="ew", padx=(3, 0), pady=2)
         self.calibrate_button = tk.Button(
             buttons, text="标定直立基准", command=self._calibrate, font=self._font(10)
         )
-        self.calibrate_button.grid(row=0, column=1, sticky="ew", padx=(3, 0), pady=2)
+        self.calibrate_button.grid(row=1, column=0, sticky="ew", padx=(0, 3), pady=2)
         self.clear_button = tk.Button(
             buttons, text="清除标定", command=self._clear_calibration, font=self._font(10)
         )
-        self.clear_button.grid(row=1, column=0, sticky="ew", padx=(0, 3), pady=2)
+        self.clear_button.grid(row=1, column=1, sticky="ew", padx=(3, 0), pady=2)
         self.save_button = tk.Button(
             buttons, text="保存快照", command=self._save_snapshot, font=self._font(10)
         )
-        self.save_button.grid(row=1, column=1, sticky="ew", padx=(3, 0), pady=2)
+        self.save_button.grid(row=2, column=0, sticky="ew", padx=(0, 3), pady=2)
+        self.save_zone_button = tk.Button(
+            buttons, text="保存分区配置", command=self._save_zone_config, font=self._font(10)
+        )
+        self.save_zone_button.grid(row=2, column=1, sticky="ew", padx=(3, 0), pady=2)
 
         self.action_label = tk.Label(
             panel,
-            text="快捷键：空格 暂停/继续 · C 标定 · R 清除标定 · S 保存快照 · Q/Esc 退出",
+            text="快捷键：空格 暂停/继续 · Z 分区设置 · C 标定 · R 清除标定 · S 保存快照 · Q/Esc 退出",
             font=self._font(9),
             fg="#0b5cad",
             bg=BG,
@@ -313,6 +451,7 @@ class KitchenUI:
         self.root.bind("<KeyPress-c>", lambda _event: self._calibrate())
         self.root.bind("<KeyPress-r>", lambda _event: self._clear_calibration())
         self.root.bind("<KeyPress-s>", lambda _event: self._save_snapshot())
+        self.root.bind("<KeyPress-z>", lambda _event: self._open_zone_dialog())
 
     def _set_buttons_enabled(self, enabled: bool) -> None:
         state = "normal" if enabled else "disabled"
@@ -374,6 +513,12 @@ class KitchenUI:
         if self._closed:
             return
         self._closed = True
+        if self._zone_dialog is not None:
+            try:
+                self._zone_dialog.destroy()
+            except tk.TclError:
+                pass
+            self._zone_dialog = None
         if self._after_id is not None:
             try:
                 self.root.after_cancel(self._after_id)
@@ -546,6 +691,8 @@ class KitchenUI:
         level = perf.get("level") or "--"
         total = self._format_number(perf.get("total_ms"), 0)
         self.level_label.configure(text=f"降级级别：{level}   当前帧 {total} ms")
+        self._refresh_activity(snapshot)
+        self._refresh_event_log()
         self.panel_updates += 1
 
     def _render_hands(self, hands: list) -> None:
@@ -567,6 +714,9 @@ class KitchenUI:
             label_zh = HAND_LABEL_ZH.get(label, "手部")
             grip = str(hand.get("grip_zh") or hand.get("grip") or "未知")
             notes: list[str] = []
+            zone = str(hand.get("zone") or "unknown")
+            if zone in ("A", "B"):
+                notes.append(f"{zone} 区")
             if hand.get("in_workspace"):
                 notes.append("在操作区")
             if hand.get("busy"):
@@ -587,6 +737,300 @@ class KitchenUI:
             summaries.append(f"{label_zh}：{grip}")
         if summaries:
             self.hands_summary = " | ".join(summaries)
+
+    # ------------------------------------------------------------------ 情境感知面板
+    def _refresh_activity(self, snapshot: dict) -> None:
+        activity = snapshot.get("activity") or {}
+        if not isinstance(activity, dict):
+            activity = {}
+        state = str(activity.get("state") or "UNKNOWN").upper()
+        state_zh = str(activity.get("state_zh") or ACTIVITY_STATE_ZH.get(state, state))
+        self.activity_label.configure(text=state_zh, fg=ACTIVITY_COLORS.get(state, COLOR_UNKNOWN))
+
+        zone = str(activity.get("zone") or "--")
+        duration_ms = activity.get("duration_ms")
+        duration_text = "--"
+        if isinstance(duration_ms, (int, float)):
+            seconds = max(0.0, float(duration_ms)) / 1000.0
+            duration_text = f"{seconds:.1f}s" if seconds < 60.0 else f"{seconds / 60.0:.1f}min"
+        movement = str(activity.get("movement_level") or "unknown").upper()
+        movement_zh = MOVEMENT_ZH.get(movement, movement)
+        quality = str(activity.get("observation_quality") or "UNKNOWN").upper()
+        quality_zh = QUALITY_ZH.get(quality, quality)
+        self.activity_info_label.configure(
+            text=f"区域 {zone}   持续 {duration_text}   移动 {movement_zh}   质量 {quality_zh}"
+        )
+
+        chopping = activity.get("chopping") or {}
+        if isinstance(chopping, dict) and chopping.get("detected"):
+            rhythm = self._format_number(chopping.get("rhythm_hz"), 1)
+            score = self._format_number(chopping.get("score"), 2)
+            stable_text = "稳定" if chopping.get("stable") else "未稳定"
+            self.chopping_label.configure(text=f"切菜节奏 {rhythm} Hz · {stable_text} · 分数 {score}")
+        else:
+            self.chopping_label.configure(text="切菜：未检测到节奏")
+
+        last_event = activity.get("event")
+        if last_event:
+            last_text = EVENT_ZH.get(str(last_event), str(last_event))
+        else:
+            last_text = "--"
+        self.last_event_label.configure(text=f"最近事件：{last_text}")
+
+    def _refresh_event_log(self) -> None:
+        worker = self.worker
+        if worker is None or self.event_text is None:
+            return
+        events = worker.recent_events(30)
+        signature = tuple((str(item.get("wall_time")), str(item.get("event"))) for item in events)
+        if signature == self._event_log_sig:
+            return
+        self._event_log_sig = signature
+        if events:
+            lines = [self._event_line(item) for item in reversed(events)]
+            text = "\n".join(lines)
+        else:
+            text = "（暂无事件；有活动变化时写入 outputs/events）"
+        self.event_text.configure(state="normal")
+        self.event_text.delete("1.0", "end")
+        self.event_text.insert("end", text)
+        self.event_text.configure(state="disabled")
+        self.event_text.yview_moveto(0.0)
+
+    def _event_line(self, event: dict) -> str:
+        wall = str(event.get("wall_time") or "")
+        if len(wall) >= 19 and "T" in wall:
+            stamp = wall[11:19]
+        else:
+            stamp = wall[:8] or "--:--:--"
+        name = str(event.get("event") or "?")
+        name_zh = EVENT_ZH.get(name, name)
+        zone = str(event.get("zone") or "")
+        evidence = event.get("evidence") if isinstance(event.get("evidence"), dict) else {}
+        detail = ""
+        if evidence.get("rhythm_hz") is not None:
+            try:
+                detail = f" {float(evidence['rhythm_hz']):.1f}Hz"
+            except (TypeError, ValueError):
+                detail = ""
+        elif evidence.get("from") and evidence.get("to"):
+            detail = f" {evidence['from']}→{evidence['to']}"
+        zone_text = f" {zone}" if zone else ""
+        return f"{stamp}  {name_zh}{zone_text}{detail}"
+
+    # ------------------------------------------------------------------ 分区设置
+    def _zone_data_from_snapshot(self) -> dict:
+        zones = (self.last_snapshot or {}).get("zones") or {}
+        labels = zones.get("labels") if isinstance(zones.get("labels"), dict) else {}
+        return {
+            "split_x": zones.get("split_x", self.config.get("zones.split_x", 0.5)),
+            "deadband": zones.get("deadband", self.config.get("zones.deadband", 0.02)),
+            "ema_alpha": self.config.get("zones.ema_alpha", 0.35),
+            "enter_ms": self.config.get("zones.enter_ms", 300),
+            "labels": {
+                "A": labels.get("A", self.config.get("zones.labels.A", "备菜区")),
+                "B": labels.get("B", self.config.get("zones.labels.B", "处理区")),
+            },
+        }
+
+    def _open_zone_dialog(self) -> None:
+        if self._closed:
+            return
+        if self._zone_dialog is not None and self._zone_dialog.winfo_exists():
+            self._zone_dialog.lift()
+            return
+
+        current: dict = {}
+        worker = self.worker
+        if worker is not None:
+            try:
+                current = worker.zone_settings() or {}
+            except Exception:
+                current = {}
+        if not current:
+            current = self._zone_data_from_snapshot()
+        labels = current.get("labels") if isinstance(current.get("labels"), dict) else {}
+        self._zone_vars = {
+            "split_x": tk.StringVar(value=f"{float(current.get('split_x', 0.5)):.2f}"),
+            "deadband": tk.StringVar(value=f"{float(current.get('deadband', 0.02)):.2f}"),
+            "label_a": tk.StringVar(value=str(labels.get("A") or "备菜区")),
+            "label_b": tk.StringVar(value=str(labels.get("B") or "处理区")),
+        }
+
+        win = tk.Toplevel(self.root)
+        win.title("A/B 分区设置")
+        win.configure(bg=BG_PANEL)
+        win.resizable(False, False)
+        win.transient(self.root)
+        self._zone_dialog = win
+        win.protocol("WM_DELETE_WINDOW", lambda: self._close_zone_dialog(win))
+
+        body = tk.Frame(win, bg=BG_PANEL, padx=14, pady=12)
+        body.pack(fill="both", expand=True)
+        tk.Label(
+            body,
+            text="A/B 分区设置",
+            font=self._font(13, "bold"),
+            fg="#222222",
+            bg=BG_PANEL,
+            anchor="w",
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 6))
+
+        tk.Label(body, text="分割线位置（0.10–0.90）", font=self._font(10), fg="#333333", bg=BG_PANEL).grid(
+            row=1, column=0, sticky="w", pady=(0, 4)
+        )
+        split_row = tk.Frame(body, bg=BG_PANEL)
+        split_row.grid(row=1, column=1, sticky="w", pady=(0, 4))
+        tk.Scale(
+            split_row,
+            from_=0.10,
+            to=0.90,
+            resolution=0.01,
+            orient="horizontal",
+            length=230,
+            showvalue=False,
+            variable=self._zone_vars["split_x"],
+            bg=BG_PANEL,
+            highlightthickness=0,
+            troughcolor="#d8d8d8",
+            sliderlength=18,
+        ).pack(side="left")
+        tk.Entry(split_row, textvariable=self._zone_vars["split_x"], width=6, font=self._font(10)).pack(
+            side="left", padx=(8, 0)
+        )
+
+        tk.Label(body, text="死区（0.00–0.10）", font=self._font(10), fg="#333333", bg=BG_PANEL).grid(
+            row=2, column=0, sticky="w", pady=(0, 4)
+        )
+        tk.Entry(body, textvariable=self._zone_vars["deadband"], width=8, font=self._font(10)).grid(
+            row=2, column=1, sticky="w", pady=(0, 4)
+        )
+
+        tk.Label(body, text="A 区名称", font=self._font(10), fg="#333333", bg=BG_PANEL).grid(
+            row=3, column=0, sticky="w", pady=(0, 4)
+        )
+        tk.Entry(body, textvariable=self._zone_vars["label_a"], width=18, font=self._font(10)).grid(
+            row=3, column=1, sticky="w", pady=(0, 4)
+        )
+        tk.Label(body, text="B 区名称", font=self._font(10), fg="#333333", bg=BG_PANEL).grid(
+            row=4, column=0, sticky="w", pady=(0, 4)
+        )
+        tk.Entry(body, textvariable=self._zone_vars["label_b"], width=18, font=self._font(10)).grid(
+            row=4, column=1, sticky="w", pady=(0, 4)
+        )
+
+        hint = tk.Label(
+            body,
+            text="分割线按你看到的画面计算（已包含镜像）；A 在左、B 在右。\n应用只对本次运行生效；保存会写入 config/zones.json，下次启动仍生效。",
+            font=self._font(9),
+            fg=COLOR_MUTED,
+            bg=BG_PANEL,
+            justify="left",
+            anchor="w",
+            wraplength=390,
+        )
+        hint.grid(row=5, column=0, columnspan=2, sticky="w", pady=(2, 4))
+
+        error_label = tk.Label(
+            body, text="", font=self._font(9), fg=COLOR_ERROR, bg=BG_PANEL, anchor="w", wraplength=390
+        )
+        error_label.grid(row=6, column=0, columnspan=2, sticky="w")
+
+        buttons = tk.Frame(body, bg=BG_PANEL)
+        buttons.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        tk.Button(
+            buttons,
+            text="应用",
+            command=lambda: self._zone_dialog_apply(win, error_label, persist=False),
+            font=self._font(10),
+        ).pack(side="left", padx=(0, 4))
+        tk.Button(
+            buttons,
+            text="保存到配置文件",
+            command=lambda: self._zone_dialog_apply(win, error_label, persist=True),
+            font=self._font(10),
+        ).pack(side="left", padx=(0, 4))
+        tk.Button(
+            buttons, text="恢复默认", command=self._zone_dialog_reset, font=self._font(10)
+        ).pack(side="left", padx=(0, 4))
+        tk.Button(buttons, text="关闭", command=lambda: self._close_zone_dialog(win), font=self._font(10)).pack(
+            side="left"
+        )
+
+        win.update_idletasks()
+        x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - win.winfo_width()) // 2)
+        y = self.root.winfo_rooty() + 80
+        win.geometry(f"+{x}+{y}")
+
+    def _zone_dialog_reset(self) -> None:
+        for key, value in (("split_x", "0.50"), ("deadband", "0.02"), ("label_a", "备菜区"), ("label_b", "处理区")):
+            var = self._zone_vars.get(key)
+            if var is not None:
+                var.set(value)
+
+    def _zone_dialog_apply(self, win: tk.Toplevel, error_label: tk.Label, persist: bool) -> None:
+        try:
+            split = float(self._zone_vars["split_x"].get())
+            deadband = float(self._zone_vars["deadband"].get())
+            label_a = self._zone_vars["label_a"].get().strip() or "备菜区"
+            label_b = self._zone_vars["label_b"].get().strip() or "处理区"
+            if not 0.10 <= split <= 0.90:
+                raise ValueError("分割线位置需在 0.10–0.90 之间")
+            if not 0.0 <= deadband <= 0.10:
+                raise ValueError("死区需在 0.00–0.10 之间")
+
+            worker = self.worker
+            base = {}
+            if worker is not None:
+                try:
+                    base = worker.zone_settings() or {}
+                except Exception:
+                    base = {}
+            data = {
+                "split_x": split,
+                "deadband": deadband,
+                "ema_alpha": float(base.get("ema_alpha", self.config.get("zones.ema_alpha", 0.35))),
+                "enter_ms": float(base.get("enter_ms", self.config.get("zones.enter_ms", 300))),
+                "labels": {"A": label_a, "B": label_b},
+            }
+            if worker is not None and worker.pipeline is not None:
+                worker.apply_zone_settings(data, persist=persist)
+                action = "已保存分区配置（config/zones.json）" if persist else "已应用分区配置（下一帧生效）"
+            elif persist:
+                path = zones_file(self.config)
+                save_settings(path, ZoneSettings.from_dict(data))
+                action = f"已保存分区配置（{path.name}）"
+            else:
+                raise RuntimeError("感知线程尚未就绪，只能先保存到配置文件")
+            error_label.configure(text="")
+            self._set_action(action)
+        except Exception as exc:
+            message = f"{type(exc).__name__}: {exc}"
+            error_label.configure(text=message)
+            self._set_action(f"分区设置失败：{message}")
+
+    def _save_zone_config(self) -> None:
+        worker = self.worker
+        try:
+            if worker is not None and worker.pipeline is not None:
+                data = worker.zone_settings()
+                if not data:
+                    raise RuntimeError("读取当前分区配置失败")
+                worker.apply_zone_settings(data, persist=True)
+            else:
+                data = self._zone_data_from_snapshot()
+                save_settings(zones_file(self.config), ZoneSettings.from_dict(data))
+            self._set_action("已保存当前分区配置到 config/zones.json")
+        except Exception as exc:
+            self._set_action(f"保存分区配置失败：{type(exc).__name__}: {exc}")
+
+    def _close_zone_dialog(self, win: tk.Toplevel) -> None:
+        if self._zone_dialog is win:
+            self._zone_dialog = None
+        try:
+            win.destroy()
+        except tk.TclError:
+            pass
 
     # ------------------------------------------------------------------ 按钮动作
     def _toggle_pause(self) -> None:
