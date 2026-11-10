@@ -139,6 +139,9 @@ class Pipeline:
 
         aspect = float(width) / float(height) if height else 1.0
         hand_states = [self.hand_analyzer.analyze(hf, aspect=aspect) for hf in hand_frames]
+        for hand_state in hand_states:
+            # 隔帧复用的手势结果要标 stale，避免下游把旧手部结果当成本帧新观测。
+            hand_state.stale = not run_hands
         margin = float(self.config.get("motion.in_workspace_margin", 0.1))
         hands_in_ws = hands_in_workspace([hs.bbox_norm for hs in hand_states], torso_state.features.bbox_norm, margin)
         torso_state.hands_in_workspace = hands_in_ws

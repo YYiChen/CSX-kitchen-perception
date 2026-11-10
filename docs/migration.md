@@ -18,7 +18,7 @@
    py -3.12 -m pip install -r requirements.txt
    ```
    离线环境：先在开发机 `pip download -r requirements.txt -d wheels\`，把 wheels 目录一起拷过去，目标机 `pip install --no-index --find-links wheels -r requirements.txt`
-   开发机实测版本：mediapipe 0.10.35、opencv-python 4.10、numpy 2.3.5、Pillow 12.3；requirements 用区间约束，
+   开发机实测版本：mediapipe 0.10.35、opencv-python 5.0.0、numpy 2.3.5、Pillow 12.3；requirements 用区间约束，
    演示机装好后可先跑 `scripts\check_env.py` 打印实际版本。
 4. 校验：
    ```powershell
@@ -26,7 +26,7 @@
    py -3.12 -X utf8 -m kitchen_perception verify-models
    py -3.12 -X utf8 scripts\check_env.py
    ```
-   测试请用 `py -3.12 -X utf8 tests\run_tests.py`（48 项，约 11 秒）。不要用 `python -m unittest` 直接跑全套：
+   测试请用 `py -3.12 -X utf8 tests\run_tests.py`（52 项，约 11 秒）。不要用 `python -m unittest` 直接跑全套：
    MediaPipe 在离线网络下退出时会同步尝试上传遥测，每个 landmarker 会多等约 42 秒，虽然能跑完但很慢。
 5. 启动：
    ```powershell
@@ -62,20 +62,20 @@ py -3.12 -m pip install -r requirements.txt
 
 便携包包含代码、配置、模型、测试素材、scripts、docs，不含 outputs 与缓存。
 
-## 7. 环境差异与已知风险
+## 6. 环境差异与已知风险
 
-1. **CPU-only**：Windows 版 mediapipe pip wheel 不含 GPU delegate，`delegate=GPU` 会抛 NotImplementedError；性能按 CPU 规划（640×480 单帧 p95 约 71 ms）。
+1. **CPU-only**：Windows 版 mediapipe pip wheel 不含 GPU delegate，`delegate=GPU` 会抛 NotImplementedError；性能按 CPU 规划（640×480 单帧 p95 约 66–82 ms）。
 2. **离线遥测**：MediaPipe 原生库退出时会尝试上传 Clearcut 遥测；代码已用“非阻塞 close + 入口 `os._exit`”规避，检测本身不受影响。
 3. **摄像头独占**：同一摄像头同一时间只能被一个进程稳定读取；演示前关掉其它用摄像头的程序（含旧窗口）。
 4. **Python 版本**：只在 3.12.10 上实测；3.11 理论上可用但未实测，不建议演示机换版本。
 5. **编码**：`scripts/*.ps1` 以 UTF-8 BOM 保存，Windows PowerShell 5.1 才能正确解析中文注释。
 
-## 6. 迁移后自检清单
+## 7. 迁移后自检清单
 
 - [ ] `verify-models` 通过
 - [ ] `check_env.py` 显示摄像头可用、依赖版本正常
 - [ ] `snapshot --image assets/test/official/pose.jpg` 输出 posture 字段非空
- - [ ] `tests/run_tests.py` 48 项全部通过
- - [ ] `snapshot --image assets/test/official/fist.png` 输出 grip=fist
+- [ ] `tests/run_tests.py` 52 项全部通过
+- [ ] `snapshot --image assets/test/official/fist.png` 输出 grip=fist
 - [ ] 打开 UI 能看到画面与实时状态
 - [ ] `benchmark --frames 100` 的 p95 ≤ 500 ms（若超出，程序会自动降级，必要时在 config 调整 `latency.levels`）

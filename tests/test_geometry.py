@@ -34,6 +34,11 @@ class TestGeometry(unittest.TestCase):
         state, _ = hyst.update("bent_over")
         self.assertEqual(state, "bent_over")
 
+    def test_hysteresis_stable_frames_counts(self):
+        hyst = Hysteresis(confirm_frames=3)
+        counts = [hyst.update("upright")[1] for _ in range(4)]
+        self.assertEqual(counts, [1, 2, 3, 4])
+
     def test_percentile_simple(self):
         values = [1.0, 2.0, 3.0, 4.0, 5.0]
         self.assertAlmostEqual(percentile(values, 50), 3.0)

@@ -97,12 +97,12 @@ outputs/                         运行产物（默认被 .gitignore 忽略）
 
 | 指标 | 数值 |
 | --- | --- |
-| 单帧处理 p50 | 约 64 ms |
-| 单帧处理 p95 | 约 71 ms |
-| 单帧处理 max | 约 73 ms |
+| 单帧处理 p50 | 48–64 ms |
+| 单帧处理 p95 | 66–82 ms |
+| 单帧处理 max | 71–91 ms |
 | 摄像头帧率 | 约 15–18 FPS（受曝光/环境光影响） |
 
-含姿态检测 + 手部检测 + 躯干/手指分析 + JSON 组装；未含 UI 绘制。低于 500 ms 硬上限，满足实时要求。
+以上为不同时段实测区间（Lead 自测与 T5 独立验证）。含姿态检测 + 手部检测 + 躯干/手指分析 + JSON 组装；未含 UI 绘制。低于 500 ms 硬上限，满足实时要求。
 
 ## 迁移到演示机
 
@@ -110,7 +110,7 @@ outputs/                         运行产物（默认被 .gitignore 忽略）
 
 1. `git clone` 或直接拷贝整个项目目录（含 models/）
 2. 目标机 `pip install -r requirements.txt`
-3. `py -3.12 -m kitchen_perception verify-models` 校验模型
+3. `$env:PYTHONPATH="$PWD\src"; py -3.12 -m kitchen_perception verify-models` 校验模型
 4. `scripts/check_env.py` 检查 Python/依赖/摄像头
 5. 启动 `scripts/run_demo.ps1`
 
@@ -121,6 +121,7 @@ outputs/                         运行产物（默认被 .gitignore 忽略）
 - 摄像头角度导致整体前倾角偏移时，用界面上的“标定直立基准”按钮归零
 - 五指交叉或并拢时，基于 2D 关节角的规则可能把相邻手指判成半屈
 - 笔记本摄像头常见只拍到上半身：此时髋部不可见，躯干姿态为**估算值**（界面会标注），置信度自动下调
+- 近景/特写构图（脸和手占满画面）时，MediaPipe 髋部 landmark 可能明显错误，导致躯干误判且置信度偏高（官方图 woman_hands.jpg 可复现）；演示时保持上半身+胸腹入镜、距离 ≥1 m
 - 一个 Windows 摄像头同一时间只能被一个进程稳定读取；开发/验证时避免多个程序同时抢摄像头
 - 离线/受限网络下，MediaPipe 原生库退出时会同步尝试上传 Clearcut 遥测，`close()` 或正常退出
   可能阻塞约 42 秒/实例（本机实测）。程序用“非阻塞 close + 入口 `os._exit`”规避，属上游库行为，
@@ -130,5 +131,6 @@ outputs/                         运行产物（默认被 .gitignore 忽略）
 
 - `docs/architecture.md`：模块、数据流、状态定义、JSON schema、设计决策与踩坑
 - `docs/verification.md`：验证方法与验收清单
+- `docs/verification_report.md`：T5 独立验证报告（结论、A1–A6、问题清单、未验证项）
 - `docs/migration.md`：演示机迁移/离线部署步骤
 - `docs/research_notes.md`、`docs/test_assets.md`：调研素材与实测数据（researcher 产出）

@@ -41,26 +41,27 @@ py -3.12 -X utf8 -m kitchen_perception benchmark --frames 300 --json outputs/ben
 | 项目 | 结果 | 备注 |
 | --- | --- | --- |
 | 模型 sha256 校验 | 通过 | 3 个模型与 MANIFEST 一致 |
-| unittest | **48 项全部通过**（2026-11-10，10.6 s） | 几何/配置/躯干/手指/预算/序列化/视频源/集成/CLI；用 tests/run_tests.py |
+| unittest | **52 项全部通过**（2026-11-10，10.5 s） | 几何/配置/躯干/手指/预算/序列化/视频源/集成/CLI；用 tests/run_tests.py；含 T5 后补的二次标定/滞回/降级窗口/缺键兜底用例 |
 | 单帧处理延迟（640×480，lite） | p50 ≈ 64 ms / p95 ≈ 71 ms / max ≈ 73 ms | 姿态+手部+分析，未含 UI 绘制 |
 | 摄像头 benchmark（2026-11-10，120 帧） | p50 62.4 ms / p95 82.4 ms / max 90.9 ms，verdict PASS，L0 | outputs/benchmark.json；目标 p95≤250、硬上限 500 |
+| T5 独立验证 benchmark（2026-11-10，120 帧，verifier 独占摄像头） | p50 47.95 ms / p95 65.86 ms / max 70.81 ms，verdict PASS，L0 | outputs/verify_t5/benchmark.json；报告 docs/verification_report.md |
 | UI 摄像头自测（ui-builder，15 s） | 155 帧、FPS 16.2、p95 52 ms、L0、躯干「前倾」置信度 0.61 | 见 docs/ui_notes.md §5.2 |
 | UI 关闭退出（Lead 实测） | 窗口立即关闭，进程约 4.7 s 退出 | 真实 `python -m kitchen_perception ui` + WM_CLOSE，无 40 s 卡顿 |
 | 摄像头帧率 | 约 15–18 FPS | 受曝光/环境光影响 |
-| 官方图片五指分类（端到端 snapshot） | fist.png → grip=fist（五指全 flexed）；right_hands.jpg → open（五指全 extended）；woman_hands.jpg → 左手 open / 右手 pinch | 产物 outputs/snapshots/{fist,right_hands,woman_hands}.json |
+| 官方图片五指分类（端到端 snapshot） | fist.png → grip=fist（五指全 flexed）；right_hands.jpg → open（五指全 extended）；woman_hands.jpg → 左手 partial（拇指 partial、四指 extended）/ 右手 pinch | 产物 outputs/snapshots/{fist,right_hands,woman_hands}.json |
 | MediaPipe 退出阻塞 | 单实例 close 从约 44 s 降到约 1.5 s 上限；全套测试 254 s → 10.6 s | 非阻塞 close + 入口 os._exit |
 
 > 注：本机实测时若另一个进程占用摄像头，read 会阻塞约 1 s/帧，导致 wall-clock FPS 降低但不影响单帧处理耗时统计；跑 benchmark 前请关闭其它用摄像头的程序。
 
 ## 5. 验收对照（2026-11-10）
 
-待 T5 独立验证后由 verifier/Lead 复核更新；下表是 Lead 自测证据。
+T5 独立验证已完成（verifier，2026-11-10）：结论“有条件通过”，详见 docs/verification_report.md；下表为综合 Lead 自测与 T5 复核后的证据。
 
 | 编号 | 当前状态 | 证据 |
 | --- | --- | --- |
 | A1 摄像头调用 | 通过（Lead 实测） | probe-cameras 列出 index 0；UI 15 s 155 帧；断线重连有单测 |
-| A2 躯干识别 | 通过（静态图 + UI 实测） | pose.jpg upright 0.90；UI 实时「前倾」0.61；单测覆盖 5 状态 + 滞回 |
-| A3 五指识别 | 通过（官方图端到端） | fist→fist、right_hands→open、woman_hands→open/pinch；48 项单测 |
+| A2 躯干识别 | 通过（静态图 + UI 实测） | pose.jpg upright 0.90；UI 实时「前倾」0.61；单测覆盖 5 状态 + 滞回；风险：近景特写构图可能误判（报告 S2-3，已写入 README 已知限制） |
+| A3 五指识别 | 通过（官方图端到端） | fist→fist、right_hands→open、woman_hands→partial/pinch；52 项单测 |
 | A4 实时性 | 通过 | benchmark 120 帧 p95 82.4 ms（≤250）；UI p95 52 ms |
-| A5 工程交付 | 通过（待 T5 复核） | git 已提交；verify_all.ps1 全通过；便携包 18.8 MB |
+| A5 工程交付 | 通过（T5 复核） | git 已提交；verify_all.ps1 全通过；便携包 18.83 MiB；52 项测试 10.5 s |
 | A6 可扩展性 | 通过 | config/default.json 阈值/标签；custom_rules.py 钩子 + 单测 |

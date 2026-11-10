@@ -47,18 +47,26 @@ def grip_state(fingers: dict, metrics: dict, config: Config) -> str | dict | Non
 import importlib
 import logging
 import sys
+import time
 from typing import Any
 
 from .config import PROJECT_ROOT
 
 LOGGER = logging.getLogger(__name__)
 _CACHE: dict[tuple[str, str], Any] = {}
+_CACHE_MISS: dict[tuple[str, str], float] = {}
+_MISS_TTL_S = 3.0
 
 
 def _resolve(module_name: str, function_name: str):
     key = (module_name, function_name)
     if key in _CACHE:
-        return _CACHE[key]
+        cached = _CACHE[key]
+        if cached is not None:
+            return cached
+        # 失败结果只短暂缓存：用户修好自定义模块后不必重启进程。
+        if time.monotonic() - _CACHE_MISS.get(key, 0.0) < _MISS_TTL_S:
+            return None
     if str(PROJECT_ROOT) not in sys.path:
         sys.path.insert(0, str(PROJECT_ROOT))
     try:
@@ -68,6 +76,8 @@ def _resolve(module_name: str, function_name: str):
         LOGGER.warning("自定义规则模块加载失败 %s.%s: %s", module_name, function_name, exc)
         func = None
     _CACHE[key] = func
+    if func is None:
+        _CACHE_MISS[key] = time.monotonic()
     return func
 
 
@@ -79,7 +89,11 @@ def apply_torso_rule(features: dict, config: Config) -> dict | None:
     func = _resolve(str(module_name), str(function_name))
     if func is None:
         return None
-    result = func(features, config)
+    try:
+        result = func(features, config)
+    except TypeError:
+        # 兼容只接收一个参数的实现（与 grip 钩子一致的双签名兼容）。
+        result = func(features)
     return result if isinstance(result, dict) else None
 
 

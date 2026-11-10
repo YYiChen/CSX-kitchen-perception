@@ -82,7 +82,9 @@ class Hysteresis:
             return self.state, 0
         if candidate == self.state:
             self.candidate = candidate
-            self.candidate_count = 1
+            # 已稳定时继续累计，让 stable_frames 表示“已连续稳定帧数”，
+            # 而不是恒为 1（见 docs/verification_report.md S3-1）。
+            self.candidate_count += 1
             return self.state, self.candidate_count
         if candidate == self.candidate:
             self.candidate_count += 1

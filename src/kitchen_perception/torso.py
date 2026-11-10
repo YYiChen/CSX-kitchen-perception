@@ -217,19 +217,24 @@ def compute_features(
 
 
 def _margin_to_thresholds(pitch: float, roll: float, th: dict) -> float:
+    # 用 .get 兜底：用户只覆盖一部分阈值时，缺键不应该把主流程打挂。
     boundaries: list[float] = []
     if not math.isnan(pitch):
         boundaries.extend(
-            [abs(pitch - th["upright_pitch_deg"]), abs(pitch - th["backward_pitch_deg"]), abs(pitch - th["bent_pitch_deg"])]
+            [
+                abs(pitch - float(th.get("upright_pitch_deg", 15.0))),
+                abs(pitch - float(th.get("backward_pitch_deg", -15.0))),
+                abs(pitch - float(th.get("bent_pitch_deg", 45.0))),
+            ]
         )
     if not math.isnan(roll):
-        boundaries.append(abs(abs(roll) - th["side_roll_deg"]))
+        boundaries.append(abs(abs(roll) - float(th.get("side_roll_deg", 10.0))))
     return min(boundaries) if boundaries else 0.0
 
 
 def classify(features: TorsoFeatures, config: Config) -> tuple[str, float, str]:
     """纯规则分类，返回 (posture, confidence, note)。"""
-    th = config.section("torso")["thresholds"]
+    th = config.section("torso").get("thresholds", {})
     if not features.extra.get("shoulder_visible"):
         return "no_person", 0.0, ""
 
@@ -243,10 +248,10 @@ def classify(features: TorsoFeatures, config: Config) -> tuple[str, float, str]:
 
     pitch = features.pitch_deg
     roll = features.roll_deg
-    upright_pitch = float(th["upright_pitch_deg"])
-    backward_pitch = float(th["backward_pitch_deg"])
-    bent_pitch = float(th["bent_pitch_deg"])
-    side_roll = float(th["side_roll_deg"])
+    upright_pitch = float(th.get("upright_pitch_deg", 15.0))
+    backward_pitch = float(th.get("backward_pitch_deg", -15.0))
+    bent_pitch = float(th.get("bent_pitch_deg", 45.0))
+    side_roll = float(th.get("side_roll_deg", 10.0))
 
     if features.source == "2d":
         if not math.isnan(roll) and abs(roll) > side_roll:
@@ -312,15 +317,20 @@ class TorsoAnalyzer:
         self.frame_count = 0
 
     def calibrate(self) -> dict:
-        """把当前平滑后的角度记为 0° 基准，返回偏移量。"""
+        """把当前平滑后的角度记为 0° 基准，返回偏移量。
+
+        analyze() 存进 self.last 的角度已经减过旧 offset，因此这里要把旧 offset
+        加回去（new = old + current），保证连续点两次“标定”不会把基准清零。
+        见 docs/verification_report.md S2-1。
+        """
         if self.last is not None:
             f = self.last.features
             if not math.isnan(f.pitch_deg):
-                self.offsets["pitch"] = f.pitch_deg
+                self.offsets["pitch"] += f.pitch_deg
             if not math.isnan(f.roll_deg):
-                self.offsets["roll"] = f.roll_deg
+                self.offsets["roll"] += f.roll_deg
             if not math.isnan(f.yaw_deg):
-                self.offsets["yaw"] = f.yaw_deg
+                self.offsets["yaw"] += f.yaw_deg
         return dict(self.offsets)
 
     def clear_calibration(self) -> None:

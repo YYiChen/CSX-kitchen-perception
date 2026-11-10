@@ -59,6 +59,11 @@ class TestTorsoClassify(unittest.TestCase):
         without = classify(features(pitch=2.0, hips=False), self.config)
         self.assertGreater(with_hips[1], without[1])
 
+    def test_missing_threshold_key_uses_default(self):
+        cfg = load_config()
+        cfg.data["torso"]["thresholds"].pop("upright_pitch_deg")
+        self.assertEqual(classify(features(pitch=30.0), cfg)[0], "leaning_forward")
+
 
 class TestTorsoFeatures(unittest.TestCase):
     @classmethod
@@ -108,6 +113,18 @@ class TestTorsoFeatures(unittest.TestCase):
         self.assertGreater(state.features.pitch_deg, 20.0)
         analyzer.calibrate()
         state = analyzer.analyze(pose, 640, 480)
+        self.assertLess(abs(state.features.pitch_deg), 2.0)
+
+    def test_calibration_twice_keeps_baseline(self):
+        analyzer = TorsoAnalyzer(self.config)
+        pose = helpers.make_pose(up=(0.0, -0.42, -0.2), nose_dz=-0.1)
+        analyzer.analyze(pose, 640, 480)
+        first = analyzer.calibrate()
+        for _ in range(3):
+            analyzer.analyze(pose, 640, 480)
+        second = analyzer.calibrate()
+        state = analyzer.analyze(pose, 640, 480)
+        self.assertAlmostEqual(second["pitch"], first["pitch"], delta=0.5)
         self.assertLess(abs(state.features.pitch_deg), 2.0)
 
     def test_hands_in_workspace(self):

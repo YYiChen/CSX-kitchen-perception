@@ -25,6 +25,15 @@ class TestBudget(unittest.TestCase):
             budget.observe(20.0)
         self.assertLess(budget.level_index, level_after_slow)
 
+    def test_stale_window_does_not_keep_escalating(self):
+        # 30 帧慢帧后转为快帧：旧实现会连升到 L3；修复后应在下一次评估回落到 L2。
+        budget = LatencyBudget(load_config())
+        for _ in range(30):
+            budget.observe(300.0)
+        for _ in range(120):
+            budget.observe(80.0)
+        self.assertLess(budget.level_index, 3)
+
     def test_fps_meter(self):
         meter = FpsMeter(window=10)
         meter.tick(0.0)

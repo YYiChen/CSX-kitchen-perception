@@ -32,7 +32,9 @@ class LatencyBudget:
         self.levels = levels
         self.level_index = 0
         self.window: Deque[float] = deque(maxlen=max(10, int(section.get("window_frames", 120))))
-        self.infer_window: Deque[float] = deque(maxlen=max(10, int(section.get("window_frames", 120))))
+        # 评估窗口与展示窗口分开：级别切换只清评估窗口，
+        # 这样 stats() 里的 p50/p95 仍然反映真实观察值，不会突然变成 None。
+        self.eval_window: Deque[float] = deque(maxlen=max(10, int(section.get("window_frames", 120))))
         self.max_observed_ms = 0.0
         self.total_frames = 0
 
@@ -59,15 +61,16 @@ class LatencyBudget:
     def observe(self, frame_ms: float) -> None:
         """每帧处理完调用一次；frame_ms 为该帧处理耗时。"""
         self.window.append(float(frame_ms))
+        self.eval_window.append(float(frame_ms))
         self.total_frames += 1
         self.max_observed_ms = max(self.max_observed_ms, float(frame_ms))
         if self.total_frames % self.eval_every == 0:
             self._adjust()
 
     def _adjust(self) -> None:
-        if len(self.window) < 10:
+        if len(self.eval_window) < 10:
             return
-        p95 = percentile(self.window, 95.0)
+        p95 = percentile(self.eval_window, 95.0)
         if math.isnan(p95):
             return
         if p95 > self.hard_cap_ms:
@@ -78,6 +81,10 @@ class LatencyBudget:
             new_index = self.level_index - 1
         else:
             new_index = self.level_index
+        if new_index != self.level_index:
+            # 切换级别后丢弃旧窗口：否则切换前的陈旧慢/快帧会继续影响下一次评估，
+            # 造成“慢帧早已消失仍继续升级”或“已经变快却迟迟不恢复”。
+            self.eval_window.clear()
         self.level_index = new_index
 
     def stats(self) -> dict:
@@ -97,7 +104,7 @@ class LatencyBudget:
 
     def reset(self) -> None:
         self.window.clear()
-        self.infer_window.clear()
+        self.eval_window.clear()
         self.level_index = 0
         self.total_frames = 0
         self.max_observed_ms = 0.0
