@@ -3,6 +3,9 @@ outputs/
 dist/
 *.log
 
+# 用户运行配置（按演示机调整，不随仓库分发）
+config/zones.json
+
 # Python
 __pycache__/
 *.py[cod]

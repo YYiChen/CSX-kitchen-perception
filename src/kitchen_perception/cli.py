@@ -26,10 +26,90 @@ from .budget import FpsMeter
 from .config import Config, load_config
 from .engines import ModelError, verify_models
 from .media_io import ensure_dir, imread_u, imwrite_u
+from .activity import ActivityObservation, ActivityStateMachine
+from .motion import MotionFeatures
 from .pipeline import Pipeline
 from .sources import create_source, probe_cameras
 
 LOGGER = logging.getLogger("kitchen_perception")
+
+
+# 合成观测序列：不依赖摄像头，用于演示/回归活动状态机。每项是（阶段, 持续毫秒）。
+_SIM_PHASES: dict[str, list[tuple[str, float]]] = {
+    "chop_a": [("chop_a", 3000.0)],
+    "chop_b": [("chop_b", 3000.0)],
+    "a_to_b": [("chop_a", 3000.0), ("gap", 400.0), ("chop_b", 3000.0)],
+    "pause": [("chop_a", 3000.0), ("pause", 3000.0)],
+    "moving": [("moving", 3000.0)],
+    "occluded": [("chop_a", 2000.0), ("occluded", 2500.0)],
+    "away_return": [("chop_a", 2000.0), ("away", 6000.0), ("pause", 2400.0)],
+    "no_person": [("away", 6000.0)],
+}
+
+SIM_SCENARIOS = tuple(sorted(_SIM_PHASES))
+
+
+def _sim_chopping(ts_ms: float, zone: str) -> MotionFeatures:
+    return MotionFeatures(
+        key=f"sim:right:{zone}",
+        label="right",
+        valid=True,
+        source="palm",
+        view_y=0.5,
+        speed_norm_per_s=0.3,
+        movement_level="HIGH",
+        reversals=5,
+        rhythm_hz=2.0,
+        amplitude_ratio=0.18,
+        period_cv=0.08,
+        amplitude_cv=0.10,
+        score=0.95,
+        detected=True,
+        stable=True,
+        last_chop_ms=ts_ms,
+        sampling_gap_ms=0.0,
+    )
+
+
+def _sim_observation(phase: str, ts_ms: float, frame_index: int) -> ActivityObservation:
+    obs = ActivityObservation(
+        ts_ms=float(ts_ms),
+        frame_index=int(frame_index),
+        person_visible=True,
+        hands_valid=True,
+        hands_valid_count=1,
+        body_zone="A",
+        chopping_zone="A",
+        movement_level="LOW",
+    )
+    if phase in ("chop_a", "chop_b"):
+        zone = "A" if phase == "chop_a" else "B"
+        obs.body_zone = zone
+        obs.chopping_zone = zone
+        obs.movement_level = "HIGH"
+        obs.chopping = _sim_chopping(ts_ms, zone)
+    elif phase == "moving":
+        obs.movement_level = "HIGH"
+    elif phase == "occluded":
+        obs.hands_valid = False
+        obs.hands_valid_count = 0
+        obs.chopping = None
+        obs.movement_level = "unknown"
+    elif phase == "away":
+        obs.person_visible = False
+        obs.hands_valid = False
+        obs.hands_valid_count = 0
+        obs.body_zone = "unknown"
+        obs.chopping_zone = "unknown"
+        obs.chopping = None
+        obs.movement_level = "unknown"
+    elif phase == "gap":
+        obs.chopping = None
+        obs.movement_level = "LOW"
+    elif phase == "pause":
+        obs.chopping = None
+        obs.movement_level = "LOW"
+    return obs
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -71,6 +151,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_snap.add_argument("--video", default=None)
     p_snap.add_argument("--json", dest="json_out", default=None)
     p_snap.add_argument("--overlay", dest="overlay_out", default=None)
+
+    p_sim = sub.add_parser("simulate", help="用合成观测序列演示活动状态机（无需摄像头）")
+    p_sim.add_argument("--scenario", choices=SIM_SCENARIOS, default="a_to_b")
+    p_sim.add_argument("--step-ms", type=float, default=50.0, help="合成帧间隔（毫秒）")
+    p_sim.add_argument("--json", dest="json_out", default=None, help="输出 JSON 路径")
     return parser
 
 
@@ -283,6 +368,73 @@ def _percentile(sorted_values: list[float], q: float) -> float:
     return sorted_values[lo] * (hi - pos) + sorted_values[hi] * (pos - lo)
 
 
+def cmd_simulate(args: argparse.Namespace, config: Config) -> int:
+    """把合成观测喂给活动状态机，输出状态时间线与事件。"""
+    scenario = str(args.scenario)
+    phases = _SIM_PHASES.get(scenario)
+    if not phases:
+        print(f"未知场景: {scenario}")
+        return 1
+    step_ms = max(10.0, float(args.step_ms))
+    machine = ActivityStateMachine(config)
+    events: list[dict] = []
+    timeline: list[dict] = []
+    result: dict = {}
+    ts_ms = 0.0
+    frame_index = 0
+    for phase, duration_ms in phases:
+        steps = max(1, int(round(float(duration_ms) / step_ms)))
+        for _ in range(steps):
+            obs = _sim_observation(phase, ts_ms, frame_index)
+            result = machine.update(obs)
+            for event in machine.take_events():
+                events.append(event.to_dict())
+            if not timeline or timeline[-1]["state"] != result["state"]:
+                timeline.append(
+                    {
+                        "ts_ms": round(ts_ms, 1),
+                        "state": result["state"],
+                        "state_zh": result["state_zh"],
+                        "zone": result["zone"],
+                        "quality": result["observation_quality"],
+                    }
+                )
+            ts_ms += step_ms
+            frame_index += 1
+    summary = {
+        "scenario": scenario,
+        "duration_ms": round(ts_ms, 1),
+        "frames": frame_index,
+        "final_state": result.get("state", "UNKNOWN"),
+        "final_state_zh": result.get("state_zh", "UNKNOWN"),
+        "states_seen": sorted({item["state"] for item in timeline}),
+        "event_count": len(events),
+    }
+    report = {
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "step_ms": step_ms,
+        "summary": summary,
+        "timeline": timeline,
+        "events": events,
+    }
+    out_path = config.resolve_path(args.json_out or f"outputs/simulate_{scenario}.json")
+    ensure_dir(out_path.parent)
+    out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(
+        f"场景 {scenario}：{frame_index} 帧，{ts_ms / 1000.0:.1f}s，"
+        f"最终 {summary['final_state']}（{summary['final_state_zh']}），事件 {len(events)} 条"
+    )
+    for item in timeline:
+        print(f"  {item['ts_ms'] / 1000.0:6.2f}s  {item['state']:<18} zone={item['zone']}  quality={item['quality']}")
+    for event in events:
+        print(
+            f"  {float(event.get('ts_ms', 0.0)) / 1000.0:6.2f}s  EVENT {event.get('event')}  "
+            f"{event.get('previous_state')}→{event.get('state')}"
+        )
+    print(f"JSON 已写入 {out_path}")
+    return 0
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -300,6 +452,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             return cmd_benchmark(args, config)
         if args.command == "snapshot":
             return cmd_snapshot(args, config)
+        if args.command == "simulate":
+            return cmd_simulate(args, config)
         if args.command == "ui":
             try:
                 from .ui import run_ui

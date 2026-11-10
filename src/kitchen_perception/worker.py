@@ -90,6 +90,8 @@ class PerceptionWorker:
                         failures += 1
                         if failures > 30:
                             self.error = source.last_error or "摄像头读取失败"
+                            if self.pipeline is not None:
+                                self.pipeline.notify_camera_error(self.error)
                             break
                         time.sleep(0.05)
                         continue
@@ -106,6 +108,11 @@ class PerceptionWorker:
         except Exception as exc:  # 线程内异常必须记录下来给 UI 显示
             LOGGER.exception("感知线程异常")
             self.error = f"{type(exc).__name__}: {exc}"
+            if self.pipeline is not None:
+                try:
+                    self.pipeline.notify_camera_error(self.error)
+                except Exception:
+                    LOGGER.exception("记录摄像头异常事件失败")
         finally:
             if self.pipeline is not None:
                 self.pipeline.close()
@@ -137,3 +144,30 @@ class PerceptionWorker:
             self._stop.set()
         else:
             self.start()
+
+    # ------------------------------------------------------------------ 阶段二接口
+    def recent_events(self, limit: int = 30) -> list[dict]:
+        pipeline = self.pipeline
+        if pipeline is None:
+            return []
+        try:
+            return pipeline.event_logger.recent(limit)
+        except Exception:
+            LOGGER.exception("读取最近事件失败")
+            return []
+
+    def zone_settings(self) -> Optional[dict]:
+        pipeline = self.pipeline
+        if pipeline is None:
+            return None
+        try:
+            return pipeline.zones.settings.to_dict()
+        except Exception:
+            LOGGER.exception("读取分区配置失败")
+            return None
+
+    def apply_zone_settings(self, data: dict, persist: bool = False) -> dict:
+        pipeline = self.pipeline
+        if pipeline is None:
+            raise RuntimeError("感知线程尚未就绪")
+        return pipeline.apply_zone_settings(data, persist=persist)

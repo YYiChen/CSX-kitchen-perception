@@ -64,6 +64,10 @@ class TestTorsoClassify(unittest.TestCase):
         cfg.data["torso"]["thresholds"].pop("upright_pitch_deg")
         self.assertEqual(classify(features(pitch=30.0), cfg)[0], "leaning_forward")
 
+    def test_implausible_orientation_is_uncertain(self):
+        # 空场景里 MediaPipe 可能把挂着的衣服误检成倒置人体；不能输出“后仰”。
+        self.assertEqual(classify(features(pitch=-169.5, roll=137.7), self.config)[0], "uncertain")
+
 
 class TestTorsoFeatures(unittest.TestCase):
     @classmethod

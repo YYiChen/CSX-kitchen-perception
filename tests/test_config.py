@@ -9,7 +9,7 @@ from kitchen_perception.config import DEFAULT_CONFIG_PATH, Config, load_config
 class TestConfig(unittest.TestCase):
     def test_default_config_sections(self):
         config = load_config()
-        for section in ("project", "models", "camera", "inference", "torso", "hands", "motion", "latency", "ui", "output"):
+        for section in ("project", "models", "camera", "inference", "torso", "hands", "motion", "zones", "chopping", "activity", "latency", "ui", "output", "logging"):
             self.assertIsInstance(config.section(section), dict)
 
     def test_dotted_get_and_default(self):
@@ -26,7 +26,7 @@ class TestConfig(unittest.TestCase):
     def test_default_config_file_exists(self):
         self.assertTrue(DEFAULT_CONFIG_PATH.exists())
         data = json.loads(DEFAULT_CONFIG_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(data["project"]["schema_version"], "1.0")
+        self.assertEqual(data["project"]["schema_version"], "1.1")
 
     def test_custom_rule_module_resolvable(self):
         config = load_config()

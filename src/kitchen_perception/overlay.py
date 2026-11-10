@@ -25,6 +25,9 @@ COLOR_PARTIAL = (0, 200, 255)
 COLOR_BAD = (60, 60, 255)
 COLOR_UNKNOWN = (170, 170, 170)
 COLOR_WARN = (0, 165, 255)
+COLOR_ZONE_A = (220, 180, 40)   # BGR：偏蓝
+COLOR_ZONE_B = (40, 170, 230)   # BGR：偏橙
+COLOR_BODY = (255, 80, 220)
 
 POSE_CONNECTIONS = (
     (0, 1), (1, 2), (2, 3), (3, 7),
@@ -108,6 +111,51 @@ class OverlayRenderer:
                 cv2.circle(canvas, point, 2, COLOR_HAND, -1, cv2.LINE_AA)
 
     # ------------------------------------------------------------------ HUD
+    def _draw_zones(self, canvas: np.ndarray, zones: dict) -> None:
+        """画 A/B 半透明分区、分割线、活动区高亮、身体重心。"""
+        h, w = canvas.shape[:2]
+        try:
+            split = float(zones.get("split_x", 0.5))
+        except (TypeError, ValueError):
+            split = 0.5
+        split = min(max(split, 0.05), 0.95)
+        x = int(round(split * w))
+        layer = canvas.copy()
+        cv2.rectangle(layer, (0, 0), (max(0, x - 1), h), COLOR_ZONE_A, -1)
+        cv2.rectangle(layer, (min(w - 1, x), 0), (w - 1, h), COLOR_ZONE_B, -1)
+        cv2.addWeighted(layer, 0.10, canvas, 0.90, 0, canvas)
+        active_zone = str(zones.get("body_zone", "unknown"))
+        if active_zone in ("A", "B"):
+            color = COLOR_ZONE_A if active_zone == "A" else COLOR_ZONE_B
+            if active_zone == "A":
+                cv2.rectangle(canvas, (2, 2), (max(2, x - 3), h - 3), color, 2)
+            else:
+                cv2.rectangle(canvas, (min(w - 3, x + 1), 2), (w - 3, h - 3), color, 2)
+        cv2.line(canvas, (x, 0), (x, h), (255, 255, 255), 2, cv2.LINE_AA)
+        # 画在底部两角：左上角会被 HUD 盖住，底部中央留给警示条。
+        label_y = max(30, h - 12)
+        cv2.putText(canvas, "A", (12, label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, COLOR_ZONE_A, 2, cv2.LINE_AA)
+        cv2.putText(canvas, "B", (max(12, w - 30), label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, COLOR_ZONE_B, 2, cv2.LINE_AA)
+        center = zones.get("body_center_norm")
+        if isinstance(center, (list, tuple)) and len(center) == 2:
+            cx = int(round(float(center[0]) * w))
+            cy = int(round(float(center[1]) * h))
+            cv2.drawMarker(canvas, (cx, cy), COLOR_BODY, markerType=cv2.MARKER_CROSS, markerSize=16, thickness=2)
+            cv2.circle(canvas, (cx, cy), 5, COLOR_BODY, -1, cv2.LINE_AA)
+
+    def _draw_hand_zones(self, canvas: np.ndarray, hand_states: Sequence[HandState], mirror: bool) -> None:
+        h, w = canvas.shape[:2]
+        for state in hand_states:
+            if not state.palm_norm or len(state.palm_norm) != 2:
+                continue
+            x = (1.0 - float(state.palm_norm[0])) if mirror else float(state.palm_norm[0])
+            px = int(round(x * w))
+            py = int(round(float(state.palm_norm[1]) * h))
+            color = COLOR_ZONE_A if state.zone == "A" else COLOR_ZONE_B if state.zone == "B" else COLOR_UNKNOWN
+            cv2.circle(canvas, (px, py), 6, color, -1, cv2.LINE_AA)
+            cv2.circle(canvas, (px, py), 9, (255, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(canvas, str(state.zone), (px + 10, py + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
+
     def _hud_lines(self, torso: TorsoState, hand_states: Sequence[HandState], perf: dict, fps: float, extra: Iterable[str]) -> list[str]:
         lines: list[str] = []
         posture = torso.posture_zh or torso.posture
@@ -168,14 +216,20 @@ class OverlayRenderer:
         fps: float = 0.0,
         mirror: Optional[bool] = None,
         extra_lines: Optional[Iterable[str]] = None,
+        zones: Optional[dict] = None,
+        activity: Optional[dict] = None,
     ) -> np.ndarray:
         if mirror is None:
             mirror = bool(self.config.get("ui.mirror_preview", True))
         canvas = cv2.flip(frame, 1) if mirror else frame.copy()
+        if zones:
+            self._draw_zones(canvas, zones)
         if pose.present:
             self._draw_pose(canvas, pose, mirror)
         if hand_frames:
             self._draw_hands(canvas, hand_frames, hand_states, mirror)
+        if hand_states:
+            self._draw_hand_zones(canvas, hand_states, mirror)
 
         warning = None
         if torso.posture == "no_person":

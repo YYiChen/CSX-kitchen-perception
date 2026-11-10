@@ -253,6 +253,15 @@ def classify(features: TorsoFeatures, config: Config) -> tuple[str, float, str]:
     bent_pitch = float(th.get("bent_pitch_deg", 45.0))
     side_roll = float(th.get("side_roll_deg", 10.0))
 
+    # 世界坐标偶尔会把衣架/椅背等误检成“倒置人体”（pitch 接近 ±180°）。
+    # 这种角度在正常站姿/弯腰范围内不可能出现，宁可报 uncertain，也不输出错误姿态。
+    plausible_pitch = float(config.get("torso.plausible_pitch_deg", 110.0))
+    plausible_roll = float(config.get("torso.plausible_roll_deg", 80.0))
+    if (not math.isnan(pitch) and abs(pitch) > plausible_pitch) or (
+        not math.isnan(roll) and abs(roll) > plausible_roll
+    ):
+        return "uncertain", clamp(base_vis * 0.35, 0.0, 1.0), "躯干角度超出可信范围"
+
     if features.source == "2d":
         if not math.isnan(roll) and abs(roll) > side_roll:
             posture = "leaning_side"

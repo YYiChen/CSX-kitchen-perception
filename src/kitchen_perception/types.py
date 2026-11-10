@@ -121,6 +121,10 @@ class HandState:
     stale: bool = False
     wrist_norm: list[float] | None = None
     bbox_norm: list[float] | None = None
+    # V2：掌心参考点（原始归一化坐标）与 A/B 分区
+    palm_norm: list[float] | None = None
+    zone: str = "unknown"
+    zone_code: str = "HAND_NOT_VISIBLE"
     notes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -177,8 +181,10 @@ class TorsoState:
 @dataclass
 class PerceptionSnapshot:
     schema_version: str = "1.0"
+    camera_status: str = "UNKNOWN"
     frame: dict = field(default_factory=dict)
     perf: dict = field(default_factory=dict)
+    zones: dict = field(default_factory=dict)
     torso: TorsoState = field(default_factory=TorsoState)
     hands: list[HandState] = field(default_factory=list)
     hands_state: str = "unknown"
@@ -190,8 +196,10 @@ class PerceptionSnapshot:
     def to_dict(self) -> dict:
         return {
             "schema_version": self.schema_version,
+            "camera_status": self.camera_status,
             "frame": _clean(self.frame),
             "perf": _clean(self.perf),
+            "zones": _clean(self.zones),
             "torso": self.torso.to_dict(),
             "hands": [h.to_dict() for h in self.hands],
             "hands_state": self.hands_state,
