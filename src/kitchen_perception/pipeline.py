@@ -20,6 +20,7 @@ import numpy as np
 from .activity import ActivityObservation, ActivityStateMachine
 from .budget import FpsMeter, LatencyBudget
 from .config import Config, load_config
+from .demo import DemoStateTracker
 from .engines import HandEngine, ModelError, PoseEngine, resolve_model_paths, verify_models
 from .events import EventLogger
 from .fingers import HandAnalyzer
@@ -65,6 +66,7 @@ class Pipeline:
         self.zones = ZoneManager(config)
         self.motion = HandMotionTracker(config)
         self.activity = ActivityStateMachine(config)
+        self.demo = DemoStateTracker(config)
         self.event_logger = EventLogger(config)
         self.camera_status = "CONNECTED"
         self._session_logged = False
@@ -281,7 +283,10 @@ class Pipeline:
         chopping_zone = self._motion_zone(best, hand_states, observations)
         hands_valid_count = sum(1 for hs in hand_states if hs.palm_norm is not None)
         hands_valid = hands_valid_count > 0
-        person_visible = bool(pose.present and torso_state.posture not in ("no_person", "not_visible"))
+        # 侧身/近景时 Pose 常看不到躯干，但手部仍然可见；有人手的画面不能标成“无人”。
+        person_visible = bool(
+            (pose.present and torso_state.posture not in ("no_person", "not_visible")) or hands_valid
+        )
         detection_gap_ms = max((float(f.sampling_gap_ms) for f in motion_features), default=0.0)
         activity_obs = ActivityObservation(
             ts_ms=float(ts_ms),
@@ -300,6 +305,7 @@ class Pipeline:
         activity_info = self.activity.update(activity_obs)
         activity_events = self.activity.take_events()
         activity_ms = (time.perf_counter() - activity_start) * 1000.0
+        demo_info = self.demo.update(ts_ms, best)
 
         if not self._session_logged:
             self._session_logged = True
@@ -406,6 +412,7 @@ class Pipeline:
             hands=hand_states,
             hands_state=hands_state,
             activity=activity_info,
+            demo=demo_info,
             zones=zones_info,
             camera_status=self.camera_status,
             events=events,
@@ -413,6 +420,16 @@ class Pipeline:
         self.last_snapshot = snapshot
 
         if self.renderer is not None:
+            demo_state = str(demo_info.get("state") or "")
+            demo_extra = f"切菜 {demo_info.get('state_zh', demo_state)}"
+            if demo_state == "chopping":
+                if demo_info.get("raw_detected"):
+                    demo_extra += (
+                        f"  节奏 {float(getattr(best, 'rhythm_hz', 0.0) or 0.0):.1f}Hz"
+                        f"  {'稳定' if bool(getattr(best, 'stable', False)) else '未稳定'}"
+                    )
+                else:
+                    demo_extra += "  节奏保持"
             try:
                 self.last_overlay = self.renderer.render(
                     frame,
@@ -424,13 +441,10 @@ class Pipeline:
                     fps=fps,
                     zones=zones_info,
                     activity=activity_info,
+                    demo=demo_info,
                     extra_lines=[
                         f"帧 {self.frame_index}  手 {len(hand_states)} 只",
-                        f"活动 {activity_info.get('state_zh', activity_info.get('state', 'UNKNOWN'))}"
-                        f"  区 {activity_info.get('zone', 'unknown')}"
-                        f"  切菜 {float(getattr(best, 'score', 0.0) or 0.0):.2f}"
-                        f"  {float(getattr(best, 'rhythm_hz', 0.0) or 0.0):.1f}Hz"
-                        f"  {'稳定' if bool(getattr(best, 'stable', False)) else '未稳定'}",
+                        demo_extra,
                     ],
                 )
             except Exception as exc:  # 渲染失败不能中断检测

@@ -4,6 +4,7 @@
 
 阶段一目标：默认摄像头前的**躯干状态**与**五指曲张状态**实时识别，延迟硬上限 500 ms。
 阶段二目标：在固定机位下增加**A/B 操作区**与**切菜节奏/活动状态**，为后续决策/反馈模型提供结构化输入。
+演示版目标（2026-11-11）：在阶段二切菜节奏的基础上，只输出**等待切菜 / 正在切菜 / 切菜完成**三个状态，供侧身切菜视频/固定机位演示稳定显示。
 
 明确不做：菜刀/食材等物品识别、多摄像头、训练自定义模型、鼠标框选矩形操作区、完整活动分类（炒、洗、盛等）。活动状态只回答“在哪个区、是否在切、是否暂停/离开/遮挡”。
 
@@ -44,6 +45,7 @@ Pipeline.process
 | zones.py | A/B 分区：身体重心/掌心投影、镜像感知、死区、设置持久化 |
 | motion.py | 切菜节奏：轨迹采样、方向反转、频率/振幅/稳定性评分 |
 | activity.py | 活动状态机：状态、延时、事件去重、质量标记 |
+| demo.py | 两状态演示层：把切菜节奏压成等待/正在切菜/切菜完成；确认/保持时间可配 |
 | events.py | 事件 JSONL 追加写 + 内存最近事件 |
 | overlay.py | 骨架绘制、五指状态着色、A/B 分区、中文 HUD、镜像预览 |
 | pipeline.py | 组合推理、分区/活动/事件、降级调度、快照、标定持久化 |
@@ -127,6 +129,24 @@ Pipeline.process
 
 防抖：`min_duration_ms=500` 内不因抖动离开新状态；事件冷却 `event_cooldown_ms=3000`；OCCLUDED/AWAY 例外，安全优先。质量 `observation_quality`：VALID / LOW / OCCLUDED / NO_PERSON / UNKNOWN。
 
+## 8.5 两状态演示层（DemoStateTracker，2026-11-11）
+
+演示版不替换阶段二活动状态机，而是并行增加一个很薄的 DemoStateTracker，专门回答“现在是不是在切菜、切完没有”：
+
+| 状态 | 中文 | 进入条件 |
+| --- | --- | --- |
+| waiting | 等待切菜 | 初始；尚未连续确认切菜节奏 |
+| chopping | 正在切菜 | Detected(best) 连续满足 demo.start_confirm_ms=300 |
+| done | 切菜完成 | 进入 chopping 后，连续 demo.done_after_ms=900 未再检测到切菜节奏 |
+
+Detected 直接复用 HandMotionTracker 的 MotionFeatures，判定条件为：reversals >= min_reversals=2、min_rhythm_hz=0.5 <= rhythm_hz <= max_rhythm_hz=4.0、amplitude_ratio >= min_amplitude_ratio=0.02、score >= min_score=0.5。不训练模型、不引入新依赖。
+
+输出 snapshot.demo：state / state_zh / since_ms / duration_ms / last_detected_ms / last_detected_age_ms / raw_detected / rhythm_hz / reversals / amplitude_ratio / score / hand。界面用 state 显示大标签；raw_detected=false 且 state=chopping 时显示“节奏保持中”，避免把 0 Hz 当成正在切菜的证据。
+
+演示界面只把两状态切换写进右侧“状态变化”记录；阶段二 activity 仍写入 snapshot/事件文件，但不再占据演示主面板。切菜中/完成后手离开画面属正常，叠加层不再弹“未检测到人物/把手放进画面”的旧提示。
+
+真实侧身视频验证（2026-11-11）：551 帧、1280x720、30 fps；2.833 s 进入 chopping，17.367 s 进入 done，视频 18.333 s 结束前保持 done；状态只切换 2 次，无中途抖动。该结果只证明这一机位/动作的可演示性，不等同于全厨房准确率。
+
 ## 9. 延迟与降级
 
 - 统计对象：单帧处理耗时（读帧之后到分析/快照结束），不含摄像头等待
@@ -189,6 +209,12 @@ Pipeline.process
 | activity.observation_quality | str | VALID/LOW/OCCLUDED/NO_PERSON/UNKNOWN |
 | activity.chopping | dict | 切菜节奏特征（detected/stable/rhythm_hz/score/…） |
 | activity.event | str | 本帧最后一个事件名（无则空串） |
+| demo.state | str | waiting / chopping / done |
+| demo.state_zh | str | 等待切菜 / 正在切菜 / 切菜完成 |
+| demo.duration_ms | float | 当前演示状态已持续毫秒 |
+| demo.raw_detected | bool | 本帧是否检测到切菜节奏（false 仍可能处于 chopping 保持期） |
+| demo.rhythm_hz / reversals / amplitude_ratio / score | float/int | 当前帧切菜特征（供调阈值/诊断） |
+| demo.last_detected_age_ms | float? | 距上次检测到切菜节奏的毫秒数 |
 | planned_step / observed_step | null | 预留给后续阶段 |
 | events | list | 本帧状态变化（旧 posture/hands_state + 新活动事件） |
 
@@ -209,6 +235,8 @@ Pipeline.process
 13. **切菜节奏用掌心/手腕的纵向往复**：不依赖菜刀检测；固定摄像头下手臂反复抬起/放下就是最稳定信号；手部不可靠时用姿态手腕兜底。
 14. **事件双写（内存+文件）**：UI 立即显示，文件留证据；写失败只记录 error，不阻塞检测。
 15. **无摄像头验证路径**：`simulate` 用合成观测序列覆盖状态机分支；真实摄像头只做空场景/单人 smoke。真人切菜准确率标“待复核”，不伪造。
+
+16. **演示层与活动状态机解耦**：需求收窄为“只显示正在切菜/切菜完成”，因此新增独立 DemoStateTracker，而不是改 activity 的状态枚举；旧状态机保留给后续阶段，演示面板只取两状态，且复用 motion 特征避免重复造轮子。
 
 ## 12. 踩坑记录
 

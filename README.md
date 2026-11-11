@@ -1,10 +1,19 @@
-# CSX 人体切菜检测 · 阶段一 + 阶段二
+# CSX 人体切菜检测 · 演示版 + 阶段一/二
 
-电脑端（Windows）实时感知程序：调用**默认摄像头**，识别**人体躯干状态**与**五指曲张状态**；阶段二增加**A/B 操作区**与**切菜节奏/活动状态**识别。菜刀、食材等物品识别仍不在范围内。
+电脑端（Windows）实时感知程序：调用**默认摄像头**，识别**人体躯干状态**与**五指曲张状态**；阶段二增加**A/B 操作区**与**切菜节奏/活动状态**识别。2026-11-11 增加**两状态演示模式**（正在切菜 / 切菜完成），用于固定机位、侧身切菜视频的稳定演示。菜刀、食材等物品识别仍不在范围内。
 
 技术路线是成熟的 MediaPipe Tasks（Pose Landmarker + Hand Landmarker）+ 规则化几何/时序后处理，**不训练模型、不自己写网络**。
 
 ## 功能
+
+### 演示版（2026-11-11，当前视频演示目标）
+
+- 只显示三个状态：**等待切菜 / 正在切菜 / 切菜完成**；画面底部中央与右侧面板均为大号中文标签
+- demo.py 的 DemoStateTracker 独立于阶段二活动状态机，直接复用 HandMotionTracker 的切菜节奏特征
+- 阈值集中在 config/default.json 的 demo 节：确认 start_confirm_ms=300、停止 done_after_ms=900、反转 >=2、频率 0.5-4 Hz、振幅比 >=0.02、score >=0.5
+- 演示面板的“状态变化”只记录两状态切换，不再混入 ACTIVE_A/B、MOVING、TRANSITION 等旧活动状态
+- 已用一段真实侧身切菜视频验证：2.833 s 进入“正在切菜”，17.367 s 进入“切菜完成”，视频结束前保持完成；551 帧 p95 81.3 ms，L0（详见 docs/verification.md）
+- 阶段一/二的检测能力保留在 snapshot 与调试字段中，便于后续扩展；演示主面板只强调两状态
 
 ### 阶段一（已完成）
 
@@ -21,7 +30,7 @@
 - **切菜节奏**：优先用掌心、无手时用姿态手腕的纵向往复运动，计算速度、反转次数、频率、振幅和稳定性；只有“像切菜”的节奏才进入 ACTIVE，普通移动只算 MOVING
 - **活动状态机**：`UNKNOWN / ACTIVE_A / ACTIVE_B / MOVING / PAUSED / TRANSITION_A_TO_B / TRANSITION_B_TO_A / OCCLUDED / AWAY`；带进入/退出延时、最短持续时间与事件冷却，避免抖动
 - **事件日志**：确认事件写入 `outputs/events/events_*.jsonl`，同时保留最近 50 条供界面显示；写失败不影响检测
-- **界面**：新增“情境感知”面板（活动状态/持续/移动/质量/切菜节奏）、事件日志、分区设置对话框（快捷键 Z）、保存分区配置按钮
+- **界面**：新增“情境感知”面板（活动状态/持续/移动/质量/切菜节奏）、事件日志、分区设置对话框（快捷键 Z）、保存分区配置按钮；演示版把主面板改为“切菜状态”，状态变化只显示两状态
 - **无摄像头可验证**：`simulate` 子命令用合成观测序列演示/回归活动状态机
 
 ## 环境
@@ -41,8 +50,11 @@ py -3.12 -m pip install -r requirements.txt
 $env:PYTHONPATH="$PWD\src"
 py -3.12 -X utf8 -m kitchen_perception verify-models
 
-# 3) 启动桌面界面（阶段一 + 阶段二面板）
+# 3) 启动桌面界面（演示主面板 + 阶段一/二细节）
 py -3.12 -X utf8 -m kitchen_perception ui
+
+# 3b) 用侧身切菜视频做两状态演示（按实际路径替换；UI 内按空格暂停/继续）
+py -3.12 -X utf8 -m kitchen_perception ui --video outputs/video_review/chopping_720p_30fps.mp4
 
 # 4) 无头运行 + OpenCV 预览（按 q 退出）
 py -3.12 -X utf8 -m kitchen_perception run --preview
@@ -84,6 +96,7 @@ src/kitchen_perception/
   zones.py                       A/B 分区：身体重心/掌心投影、死区、设置持久化
   motion.py                      切菜节奏：手腕/掌心轨迹、反转、频率、振幅、稳定性
   activity.py                    活动状态机：ACTIVE/PAUSED/MOVING/TRANSITION/OCCLUDED/AWAY
+  demo.py                        两状态演示：等待切菜/正在切菜/切菜完成
   events.py                      事件 JSONL 追加写 + 内存最近事件
   overlay.py                     骨架/五指着色 + A/B 分区 + 中文 HUD
   pipeline.py                    推理流水线（降级、分区、活动、事件、快照）
@@ -91,7 +104,7 @@ src/kitchen_perception/
   ui.py                          桌面界面（Tkinter）
   cli.py / __main__.py           命令行入口（含 simulate）
   custom_rules.py                按环节定制定义的扩展点
-tests/                           unittest 测试（几何/躯干/手指/预算/视频源/流水线/分区/节奏/活动/事件/模拟）
+tests/                           unittest 测试（几何/躯干/手指/预算/视频源/流水线/分区/节奏/活动/事件/模拟/演示）
 docs/                            架构、验证、迁移、UI 文档
 scripts/                         模型重下载、环境检查、一键验证、启动、便携包
 outputs/                         运行产物（默认被 .gitignore 忽略）
@@ -121,6 +134,10 @@ outputs/                         运行产物（默认被 .gitignore 忽略）
     "duration_ms": 1200.0, "movement_level": "HIGH", "observation_quality": "VALID",
     "chopping": {"detected": true, "stable": true, "rhythm_hz": 2.0, "score": 0.92}
   },
+  "demo": {
+    "state": "chopping", "state_zh": "正在切菜", "duration_ms": 1200.0,
+    "raw_detected": true, "rhythm_hz": 1.9, "reversals": 5, "score": 0.88
+  },
   "planned_step": null,
   "observed_step": null,
   "events": []
@@ -140,7 +157,9 @@ outputs/                         运行产物（默认被 .gitignore 忽略）
 | 单帧处理 max | 72.3 ms |
 | 摄像头帧率 | 约 12–18 FPS（受曝光/环境光影响） |
 
-2026-11-11 benchmark：120 帧，verdict PASS，L0；含姿态 + 手部 + 躯干/手指分析 + 分区 + 活动 + 事件 + JSON 组装，未含 UI 绘制。低于 500 ms 硬上限，满足实时要求。测试套件 **92 项**（约 11 s）。
+2026-11-11 benchmark：120 帧，verdict PASS，L0；含姿态 + 手部 + 躯干/手指分析 + 分区 + 活动 + 事件 + JSON 组装，未含 UI 绘制。低于 500 ms 硬上限，满足实时要求。测试套件 **98 项**（约 11 s）。
+
+真实侧身切菜视频（1280×720、30 fps、551 帧）：p50 60.9 ms / p95 81.3 ms / max 103.3 ms，L0；2.833 s 进入“正在切菜”，17.367 s 进入“切菜完成”，视频结束前保持完成。该视频验证的是两状态演示逻辑与界面显示，不等同于全厨房场景准确率。
 
 ## A/B 分区与活动判定怎么调
 
@@ -149,6 +168,13 @@ outputs/                         运行产物（默认被 .gitignore 忽略）
 - 普通手部移动不会触发 ACTIVE：需要切菜节奏（默认 0.8–4.0 Hz、至少 4 次反转、振幅比 ≥ 0.04、周期/振幅变异系数上限 0.35/0.45，见 `chopping` 配置）
 - 进入/退出延时、遮挡/离开阈值、转移窗口都在 `config/default.json` 的 `activity` / `chopping` / `zones` 节
 - 想按具体炒菜环节改“什么算切菜/什么算 A 区”，可改配置或 `custom_rules.py`
+
+## 两状态演示怎么调
+
+- 演示状态在 config/default.json 的 demo 节；labels_zh 可改中文文案，start_confirm_ms 控制进入“正在切菜”的连续确认，done_after_ms 控制手停后多久显示“切菜完成”
+- 误把普通移动判成切菜：提高 min_reversals / min_amplitude_ratio / min_score；漏检切菜：适当降低这些值或 min_rhythm_hz
+- 演示界面启动：py -3.12 -X utf8 -m kitchen_perception ui --video <视频路径>；右侧“切菜状态”与画面底部标签同步
+- 想回到阶段二完整活动状态，看 snapshot 的 activity 字段或运行 simulate 子命令；演示面板不再展示这些内部状态
 
 ## 迁移到演示机
 
@@ -170,7 +196,8 @@ outputs/                         运行产物（默认被 .gitignore 忽略）
 - 笔记本摄像头常见只拍到上半身：此时髋部不可见，躯干姿态为**估算值**（界面会标注），置信度自动下调
 - 近景/特写构图（脸和手占满画面）时，MediaPipe 髋部 landmark 可能明显错误，导致躯干误判且置信度偏高（官方图 woman_hands.jpg 可复现）；演示时保持上半身+胸腹入镜、距离 ≥1 m
 - 空场景中挂着的衣服/椅背可能被 MediaPipe 误检成人体；已增加“角度超出可信范围 → uncertain”门限，但极端构图仍可能误检
-- **切菜动作/活动状态的准确率尚未用真人厨房视频验证**：当前证据是 8 个合成观测场景 + 单人摄像头 smoke；演示前应用真人做切菜动作确认一次，必要时调 `chopping` 阈值
+- **真人切菜验证范围有限**：已用一段真实侧身、固定机位、只露出双手的切菜视频验证两状态演示（切菜开始/完成时间正确）；但全厨房、正面机位、不同人/光照尚未统计验证，正式演示前仍建议用目标机位彩排一次
+- **两状态演示只回答“正在切/切完”**：不识别切什么、切了多少、是否换区；旧活动状态机仍在运行，但演示面板不展示
 - A/B 分区按身体重心而非菜板位置；如果人站在画面中间但手伸到另一侧，可能出现“身体在 A、手在 B”的提示，需调 `split_x` 或让身体对准操作区
 - 一个 Windows 摄像头同一时间只能被一个进程稳定读取；开发/验证时避免多个程序同时抢摄像头
 - 离线/受限网络下，MediaPipe 原生库退出时会同步尝试上传 Clearcut 遥测，`close()` 或正常退出
@@ -180,7 +207,7 @@ outputs/                         运行产物（默认被 .gitignore 忽略）
 ## 文档索引
 
 - `docs/architecture.md`：模块、数据流、状态定义、JSON schema、设计决策与踩坑
-- `docs/verification.md`：验证方法与验收清单（阶段一 + 阶段二）
+- `docs/verification.md`：验证方法与验收清单（阶段一 + 阶段二 + 两状态演示）
 - `docs/verification_report.md`：T5 阶段一独立验证报告（历史记录）
 - `docs/migration.md`：演示机迁移/离线部署步骤
 - `docs/ui_notes.md`：界面结构、交互与自测记录

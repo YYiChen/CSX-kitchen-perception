@@ -142,6 +142,20 @@
     "min_duration_ms": 500.0,
     "hand_valid_score_min": 0.5
   },
+  "demo": {
+    "min_reversals": 2,
+    "min_rhythm_hz": 0.5,
+    "max_rhythm_hz": 4.0,
+    "min_amplitude_ratio": 0.02,
+    "min_score": 0.5,
+    "start_confirm_ms": 300.0,
+    "done_after_ms": 900.0,
+    "labels_zh": {
+      "waiting": "等待切菜",
+      "chopping": "正在切菜",
+      "done": "切菜完成"
+    }
+  },
   "latency": {
     "target_p95_ms": 250.0,
     "hard_cap_ms": 500.0,
@@ -155,7 +169,7 @@
     ]
   },
   "ui": {
-    "title": "厨房情境感知 · 阶段二",
+    "title": "厨房切菜状态识别 · 演示",
     "width": 1280,
     "height": 900,
     "mirror_preview": true,

@@ -28,6 +28,11 @@ COLOR_WARN = (0, 165, 255)
 COLOR_ZONE_A = (220, 180, 40)   # BGR：偏蓝
 COLOR_ZONE_B = (40, 170, 230)   # BGR：偏橙
 COLOR_BODY = (255, 80, 220)
+DEMO_COLORS_RGB = {
+    "waiting": (220, 150, 20),
+    "chopping": (0, 190, 90),
+    "done": (40, 110, 230),
+}
 
 POSE_CONNECTIONS = (
     (0, 1), (1, 2), (2, 3), (3, 7),
@@ -69,6 +74,7 @@ class OverlayRenderer:
         self.font_hud = load_cjk_font(17)
         self.font_small = load_cjk_font(15)
         self.font_title = load_cjk_font(19)
+        self.font_demo = load_cjk_font(40)
 
     # ------------------------------------------------------------------ 骨架
     @staticmethod
@@ -159,6 +165,8 @@ class OverlayRenderer:
     def _hud_lines(self, torso: TorsoState, hand_states: Sequence[HandState], perf: dict, fps: float, extra: Iterable[str]) -> list[str]:
         lines: list[str] = []
         posture = torso.posture_zh or torso.posture
+        if hand_states and torso.posture in ("no_person", "not_visible"):
+            posture = "躯干未入镜（手部可见）"
         lines.append(f"躯干：{posture}  置信度 {torso.confidence:.2f}")
         f = torso.features
         pitch = "--" if f.pitch_deg != f.pitch_deg else f"{f.pitch_deg:+.1f}°"
@@ -179,12 +187,19 @@ class OverlayRenderer:
         lines.extend(str(line) for line in extra if line)
         return lines
 
-    def _draw_hud(self, canvas: np.ndarray, lines: Sequence[str], warning: Optional[str]) -> np.ndarray:
+    def _draw_hud(
+        self,
+        canvas: np.ndarray,
+        lines: Sequence[str],
+        warning: Optional[str],
+        demo: Optional[dict] = None,
+    ) -> np.ndarray:
         if not lines and not warning:
             return canvas
         pil = bgr_to_pil(canvas)
         overlay = Image.new("RGBA", pil.size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay)
+        w, h = pil.size
         pad = 10
         line_h = 23
         text_w = max((draw.textlength(line, font=self.font_hud) for line in lines), default=0.0)
@@ -196,12 +211,25 @@ class OverlayRenderer:
             draw.text((pad, y), line, font=self.font_hud, fill=(240, 240, 240, 255))
             y += line_h
         if warning:
-            w, h = pil.size
             text_w = draw.textlength(warning, font=self.font_title)
             x = max(10, int((w - text_w) / 2))
             y = h - 54
             draw.rounded_rectangle([(x - 12, y - 8), (x + text_w + 12, y + 30)], radius=10, fill=(0, 0, 0, 160))
             draw.text((x, y), warning, font=self.font_title, fill=COLOR_WARN + (255,))
+        if demo:
+            state = str(demo.get("state") or "waiting").lower()
+            text = str(demo.get("state_zh") or demo.get("state") or "")
+            if text:
+                font = self.font_demo if w >= 720 else self.font_title
+                text_w = draw.textlength(text, font=font)
+                x = max(10, int((w - text_w) / 2))
+                y = max(10, h - 128)
+                draw.rounded_rectangle(
+                    [(x - 14, y - 10), (x + text_w + 14, y + 34)],
+                    radius=12,
+                    fill=(0, 0, 0, 185),
+                )
+                draw.text((x, y), text, font=font, fill=DEMO_COLORS_RGB.get(state, (230, 230, 230)) + (255,))
         composite = Image.alpha_composite(pil.convert("RGBA"), overlay).convert("RGB")
         return pil_to_bgr(composite)
 
@@ -218,6 +246,7 @@ class OverlayRenderer:
         extra_lines: Optional[Iterable[str]] = None,
         zones: Optional[dict] = None,
         activity: Optional[dict] = None,
+        demo: Optional[dict] = None,
     ) -> np.ndarray:
         if mirror is None:
             mirror = bool(self.config.get("ui.mirror_preview", True))
@@ -232,12 +261,16 @@ class OverlayRenderer:
             self._draw_hand_zones(canvas, hand_states, mirror)
 
         warning = None
-        if torso.posture == "no_person":
+        if torso.posture == "no_person" and not hand_states:
             warning = "未检测到人物：请坐到摄像头前"
-        elif torso.posture == "not_visible":
+        elif torso.posture == "not_visible" and not hand_states:
             warning = "躯干关键点不足：请让上半身进入画面（必要时后退）"
         elif not hand_states:
             warning = "把手放进画面即可显示五指状态"
+        # 演示版只关心“等待/正在切菜/切菜完成”。切菜中或完成后手离开画面是正常现象，
+        # 不再弹旧提示，避免和底部状态标签互相矛盾。
+        if demo and str(demo.get("state") or "") != "waiting":
+            warning = None
 
         lines = self._hud_lines(torso, hand_states, perf, fps, extra_lines or [])
-        return self._draw_hud(canvas, lines, warning)
+        return self._draw_hud(canvas, lines, warning, demo=demo)

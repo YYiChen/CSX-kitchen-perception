@@ -87,6 +87,16 @@ ACTIVITY_STATE_ZH = {
     "OCCLUDED": "手部被遮挡/观察不足",
     "AWAY": "暂未观察到用户",
 }
+DEMO_COLORS = {
+    "waiting": COLOR_PARTIAL,
+    "chopping": COLOR_OK,
+    "done": "#0b5cad",
+}
+DEMO_STATE_ZH = {
+    "waiting": "等待切菜",
+    "chopping": "正在切菜",
+    "done": "切菜完成",
+}
 QUALITY_ZH = {
     "VALID": "有效",
     "LOW": "偏低",
@@ -164,6 +174,9 @@ class KitchenUI:
         self._zone_dialog: Optional[tk.Toplevel] = None
         self._zone_vars: dict[str, tk.StringVar] = {}
         self._event_log_sig: Optional[tuple] = None
+        self._demo_history: list[tuple[str, str]] = []
+        self._last_demo_state: Optional[str] = None
+        self._last_demo_event_zh = "--"
 
         self.root = tk.Tk()
         self.root.title(str(config.get("ui.title", "厨房情境感知 · 阶段一")))
@@ -243,14 +256,14 @@ class KitchenUI:
         self.error_label.grid_remove()
         row += 1
 
-        # 情境感知：活动状态 + 切菜节奏（阶段二核心面板）
-        activity_frame = self._group(panel, "情境感知")
+        # 切菜状态：演示主面板只显示“正在切菜 / 切菜完成”
+        activity_frame = self._group(panel, "切菜状态")
         activity_frame.grid(row=row, column=0, sticky="ew", pady=(0, 6))
         row += 1
         self.activity_label = tk.Label(
             activity_frame,
-            text="等待观察",
-            font=self._font(18, "bold"),
+            text="等待切菜",
+            font=self._font(30, "bold"),
             fg=COLOR_UNKNOWN,
             bg=BG_PANEL,
             anchor="w",
@@ -258,7 +271,7 @@ class KitchenUI:
         self.activity_label.pack(fill="x", padx=6, pady=(2, 0))
         self.activity_info_label = tk.Label(
             activity_frame,
-            text="区域 --   持续 --   移动 --   质量 --",
+            text="正在等待切菜动作",
             font=self._font(10),
             fg="#333333",
             bg=BG_PANEL,
@@ -268,7 +281,7 @@ class KitchenUI:
         self.activity_info_label.pack(fill="x", padx=6)
         self.chopping_label = tk.Label(
             activity_frame,
-            text="切菜：未检测到节奏",
+            text="把手和菜刀放进画面，做反复抬起/放下的切菜动作",
             font=self._font(10),
             fg="#444444",
             bg=BG_PANEL,
@@ -363,8 +376,8 @@ class KitchenUI:
         )
         self.level_label.pack(fill="x", padx=6)
 
-        # 事件日志：显示最近确认事件，写入文件由 EventLogger 负责
-        log_frame = self._group(panel, "事件日志")
+        # 状态变化：演示版只记录“开始切菜/切菜完成”，不再展示旧活动状态机的内部事件
+        log_frame = self._group(panel, "状态变化")
         log_frame.grid(row=row, column=0, sticky="ew", pady=(0, 6))
         row += 1
         log_inner = tk.Frame(log_frame, bg=BG_PANEL)
@@ -681,7 +694,10 @@ class KitchenUI:
         self.angle_label.configure(text=f"前倾 {pitch}   侧倾 {roll}   转向 {yaw}\n朝向：{facing_zh}")
 
         hands = snapshot.get("hands")
-        self._render_hands(hands if isinstance(hands, list) else [])
+        hand_list = hands if isinstance(hands, list) else []
+        if posture in ("no_person", "not_visible") and hand_list:
+            self.torso_label.configure(text="躯干未入镜（手部可见）", fg=COLOR_UNKNOWN)
+        self._render_hands(hand_list)
 
         perf = snapshot.get("perf") or {}
         fps = self._format_number(perf.get("fps"), 1)
@@ -743,6 +759,36 @@ class KitchenUI:
         activity = snapshot.get("activity") or {}
         if not isinstance(activity, dict):
             activity = {}
+        demo = snapshot.get("demo") or {}
+        if isinstance(demo, dict) and demo:
+            state = str(demo.get("state") or "waiting").lower()
+            state_zh = str(demo.get("state_zh") or DEMO_STATE_ZH.get(state, state))
+            self.activity_label.configure(text=state_zh, fg=DEMO_COLORS.get(state, COLOR_UNKNOWN))
+            duration_text = self._format_seconds(demo.get("duration_ms"))
+            age_text = self._format_seconds(demo.get("last_detected_age_ms"))
+            rhythm = self._format_number(demo.get("rhythm_hz"), 1)
+            if state == "chopping":
+                if bool(demo.get("raw_detected")):
+                    self.activity_info_label.configure(text=f"切菜节奏 {rhythm} Hz   已持续 {duration_text}")
+                else:
+                    self.activity_info_label.configure(text=f"切菜节奏保持中   已持续 {duration_text}")
+                self.chopping_label.configure(text=f"最近抬放 {age_text} 前")
+            elif state == "done":
+                self.activity_info_label.configure(text=f"切菜完成   已保持 {duration_text}")
+                self.chopping_label.configure(text=f"最后一次切菜 {age_text} 前")
+            else:
+                self.activity_info_label.configure(text="正在等待切菜动作")
+                self.chopping_label.configure(text="把手和菜刀放进画面，做反复抬起/放下的切菜动作")
+            # 只把演示版两状态变化写进右侧记录；旧活动状态机仍照常运行但不在这里展示。
+            if state != self._last_demo_state:
+                if self._last_demo_state is not None:
+                    stamp = time.strftime("%H:%M:%S")
+                    self._demo_history.append((stamp, state_zh))
+                    self._demo_history = self._demo_history[-12:]
+                    self._last_demo_event_zh = state_zh
+                self._last_demo_state = state
+            self.last_event_label.configure(text=f"最近状态：{self._last_demo_event_zh}")
+            return
         state = str(activity.get("state") or "UNKNOWN").upper()
         state_zh = str(activity.get("state_zh") or ACTIVITY_STATE_ZH.get(state, state))
         self.activity_label.configure(text=state_zh, fg=ACTIVITY_COLORS.get(state, COLOR_UNKNOWN))
@@ -778,6 +824,23 @@ class KitchenUI:
         self.last_event_label.configure(text=f"最近事件：{last_text}")
 
     def _refresh_event_log(self) -> None:
+        snapshot = self.last_snapshot or {}
+        demo = snapshot.get("demo") if isinstance(snapshot, dict) else None
+        if isinstance(demo, dict) and demo and self.event_text is not None:
+            signature = tuple(self._demo_history)
+            if signature == self._event_log_sig:
+                return
+            self._event_log_sig = signature
+            if self._demo_history:
+                text = "\n".join(f"{stamp}  {state_zh}" for stamp, state_zh in reversed(self._demo_history))
+            else:
+                text = "（等待状态变化）"
+            self.event_text.configure(state="normal")
+            self.event_text.delete("1.0", "end")
+            self.event_text.insert("end", text)
+            self.event_text.configure(state="disabled")
+            self.event_text.yview_moveto(0.0)
+            return
         worker = self.worker
         if worker is None or self.event_text is None:
             return
@@ -790,7 +853,7 @@ class KitchenUI:
             lines = [self._event_line(item) for item in reversed(events)]
             text = "\n".join(lines)
         else:
-            text = "（暂无事件；有活动变化时写入 outputs/events）"
+            text = "（等待状态变化）"
         self.event_text.configure(state="normal")
         self.event_text.delete("1.0", "end")
         self.event_text.insert("end", text)
@@ -1190,6 +1253,16 @@ class KitchenUI:
     def _format_deg(value: object) -> str:
         text = KitchenUI._format_number(value, 1)
         return "--" if text == "--" else f"{float(text):+.1f}°"
+
+    @staticmethod
+    def _format_seconds(value: object) -> str:
+        if value is None:
+            return "--"
+        try:
+            milliseconds = max(0.0, float(value))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return "--"
+        return f"{milliseconds / 1000.0:.1f}s"
 
     def _on_callback_exception(self, exc: type, value: BaseException, tb) -> None:
         text = "".join(traceback.format_exception(exc, value, tb))

@@ -8,6 +8,7 @@
 - 不包含：`outputs/`（运行产物：快照、事件、benchmark）、`__pycache__`、虚拟环境、`scratch/`
 - `models/MANIFEST.json` 记录每个模型的 bytes/sha256/下载 URL；换机后可 `scripts/download_models.py` 重新下载并校验
 - 阶段二新增源码：`zones.py`、`motion.py`、`activity.py`、`events.py`；配置 `config/default.json` 增加 `zones/chopping/activity/logging` 段；用户分区配置写到 `config/zones.json`（可选，删除即恢复默认）
+- 两状态演示新增源码：`demo.py`；配置 `config/default.json` 增加 `demo` 段；UI 主面板显示“等待切菜/正在切菜/切菜完成”，不新增依赖
 
 ## 2. 目标机准备
 
@@ -27,7 +28,7 @@
    py -3.12 -X utf8 -m kitchen_perception verify-models
    py -3.12 -X utf8 scripts\check_env.py
    ```
-   测试请用 `py -3.12 -X utf8 tests\run_tests.py`（阶段二 **92 项，约 11 秒**）。不要用 `python -m unittest` 直接跑全套：
+   测试请用 `py -3.12 -X utf8 tests\run_tests.py`（演示版 **98 项，约 11 秒**）。不要用 `python -m unittest` 直接跑全套：
    MediaPipe 在离线网络下退出时会同步尝试上传遥测，每个 landmarker 会多等约 42 秒，虽然能跑完但很慢。
 5. 启动：
    ```powershell
@@ -89,9 +90,10 @@ bundle 含全部提交历史（不含未跟踪的 `outputs/`）；与便携包�
 - [ ] `verify-models` 通过
 - [ ] `check_env.py` 显示摄像头可用、依赖版本正常
 - [ ] `snapshot --image assets/test/official/pose.jpg` 输出 posture 字段非空
-- [ ] `tests/run_tests.py` 92 项全部通过
+- [ ] `tests/run_tests.py` 98 项全部通过
 - [ ] `snapshot --image assets/test/official/fist.png` 输出 grip=fist
 - [ ] 打开 UI 能看到画面与实时状态
+- [ ] 用 `ui --video <侧身切菜视频>` 能看到“正在切菜”与“切菜完成”两个状态，且状态变化只有两条
 - [ ] `simulate --scenario a_to_b` 输出 ACTIVE_A → TRANSITION_A_TO_B → ACTIVE_B
 - [ ] 打开“分区设置…”能改分割线并保存，重启后保持
 - [ ] `benchmark --frames 100` 的 p95 ≤ 500 ms（若超出，程序会自动降级，必要时在 config 调整 `latency.levels`）

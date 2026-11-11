@@ -189,6 +189,7 @@ class PerceptionSnapshot:
     hands: list[HandState] = field(default_factory=list)
     hands_state: str = "unknown"
     activity: dict = field(default_factory=dict)
+    demo: dict = field(default_factory=dict)
     planned_step: Any = None
     observed_step: Any = None
     events: list = field(default_factory=list)
@@ -204,6 +205,7 @@ class PerceptionSnapshot:
             "hands": [h.to_dict() for h in self.hands],
             "hands_state": self.hands_state,
             "activity": _clean(self.activity),
+            "demo": _clean(self.demo),
             "planned_step": _clean(self.planned_step),
             "observed_step": _clean(self.observed_step),
             "events": _clean(self.events),

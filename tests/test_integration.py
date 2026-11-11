@@ -37,8 +37,9 @@ class TestPipelineIntegration(unittest.TestCase):
             snapshot = pipeline.process(self.frame, 0.0)
         finally:
             pipeline.close()
-        for key in ("schema_version", "frame", "perf", "torso", "hands", "hands_state", "activity", "events"):
+        for key in ("schema_version", "frame", "perf", "torso", "hands", "hands_state", "activity", "demo", "events"):
             self.assertIn(key, snapshot)
+        self.assertIn(snapshot["demo"]["state"], {"waiting", "chopping", "done"})
         self.assertIn(snapshot["torso"]["posture"], {"upright", "leaning_forward", "leaning_backward", "leaning_side", "bent_over", "not_visible", "uncertain"})
         json.dumps(snapshot, ensure_ascii=False)
 
