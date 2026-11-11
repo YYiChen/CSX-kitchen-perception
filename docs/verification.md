@@ -21,6 +21,7 @@
 | A8 | 切菜节奏与活动状态 | 只有切菜节奏才进 ACTIVE_A/B；普通移动为 MOVING；停手为 PAUSED；A↔B 有 TRANSITION；手遮挡/离开有 OCCLUDED/AWAY；状态与事件有单测/场景回放证据 |
 | A9 | 事件与界面 | 事件写入 JSONL 且 UI 可查看；分区设置对话框可用；快照 schema 1.1 完整；不新增依赖 |
 | A10 | 两状态视频演示 | 切菜阶段 UI 与叠加层显示“正在切菜”；停手离开后显示“切菜完成”，且在视频结束前保持；右侧状态变化只出现两状态；无头 JSON 含 demo 字段 |
+| A11 | 视频导入/导出与分区开关 | UI 可导入视频并显示标注画面；可导出带标注 MP4 且与预览一致；A/B 分区线可显示/隐藏并持久化；导出/导入失败有明确提示 |
 
 ## 2. 自动化验证
 
@@ -28,7 +29,7 @@
 $env:PYTHONPATH="$PWD\src"
 # 模型完整性
 py -3.12 -X utf8 -m kitchen_perception verify-models
-# 单元/集成测试（无需摄像头，98 项）
+# 单元/集成测试（无需摄像头，103 项）
 py -3.12 -X utf8 tests/run_tests.py -v
 # 静态图片端到端
 py -3.12 -X utf8 -m kitchen_perception snapshot --image assets/test/official/pose.jpg --json outputs/snapshots/verify_pose.json --overlay outputs/debug/verify_pose.jpg
@@ -36,6 +37,8 @@ py -3.12 -X utf8 -m kitchen_perception snapshot --image assets/test/official/pos
 py -3.12 -X utf8 -m kitchen_perception simulate --scenario a_to_b --json outputs/simulate_a_to_b.json
 # 两状态演示：侧身切菜视频（本机分析副本；没有该文件时用自己的视频）
 py -3.12 -X utf8 -m kitchen_perception run --video outputs/video_review/chopping_720p_30fps.mp4 --jsonl outputs/video_demo/run_snapshots.jsonl --save-overlay outputs/video_demo/overlays
+# 视频标注导出（无需界面；输出默认可指定）
+py -3.12 -X utf8 -m kitchen_perception export-video --video outputs/video_demo/chopping_720p_input.mp4 --output outputs/exports/demo_annotated.mp4
 # 延迟实测（需要摄像头，运行时不要开其它摄像头程序）
 py -3.12 -X utf8 -m kitchen_perception benchmark --frames 300 --json outputs/benchmark.json
 ```
@@ -74,23 +77,40 @@ py -3.12 -X utf8 -m kitchen_perception benchmark --frames 300 --json outputs/ben
 > 阶段二的“切菜/活动”准确率目前只经过合成观测序列与空场景 smoke，**真人切菜准确率仍需在
 > 演示机上按上述步骤复核**。这不是自动化测试能替代的，报告中应如实标注。
 
+### 3.4 视频导入/导出与分区开关（2026-11-11）
+
+1. 打开 UI，点左侧「导入视频…」选择一段切菜视频，确认文件替换摄像头画面、左侧显示骨架/五指/HUD；
+   视频播完后自动进入暂停，点「继续」从头重播。
+2. 勾选/取消「显示 A/B 分区线和标记」，确认分割线、A/B 半透明底色、手部“A 区/B 区”标记随之出现/消失；
+   重启 UI 后开关状态保持（写入 `config/zones.json` 的 `enabled`）。
+3. 点「导出标注视频…」，选保存路径，确认状态栏进度增长；完成后用播放器打开 MP4，确认画面带骨架、
+   五指、HUD、底部“正在切菜/切菜完成”大标签，且与预览风格一致。
+4. 导出过程中点「取消导出」，确认任务停止、状态栏提示取消、目标文件不残留半成品；点「继续」可重放。
+5. 摄像头模式下「导出标注视频…」应为置灰/不可用，提示先导入视频。
+
 ## 4. 当前记录（开发机实测）
 
 | 项目 | 结果 | 备注 |
 | --- | --- | --- |
 | 模型 sha256 校验 | 通过 | 3 个模型与 MANIFEST 一致 |
 | unittest（阶段一） | 52 项通过（2026-11-10，10.5 s） | 几何/配置/躯干/手指/预算/序列化/视频源/集成/CLI |
-| unittest（阶段二 + 演示） | **98 项通过**（2026-11-11，10.8 s） | 在 92 项基础上新增 test_demo 6 项；全部无摄像头 |
+| unittest（阶段二 + 演示 + 导出） | **103 项通过**（2026-11-11，14.5 s） | 在 98 项基础上新增 test_export 4 项、zone enabled 往返 1 项；全部无摄像头 |
 | 单帧处理延迟（640×480，lite） | p50 ≈ 64 ms / p95 ≈ 71 ms / max ≈ 73 ms | 姿态+手部+分析，未含 UI 绘制 |
 | 摄像头 benchmark（阶段一） | p50 62.4 ms / p95 82.4 ms / max 90.9 ms，PASS，L0 | outputs/benchmark.json |
 | 摄像头 benchmark（阶段二，2026-11-11） | **p50 45.52 ms / p95 69.79 ms / max 72.25 ms，PASS，L0**，FPS 11.87 | outputs/benchmark_v2.json；目标 p95≤250、硬上限 500 |
-| UI smoke（阶段二，空场景，2026-11-11） | 42 帧、面板更新 21 次、latest_age 15 ms、worker 存活、分区对话框可开可关 | outputs/ui_smoke/；截图 ui_smoke.png；空场景无人属预期 |
+| UI smoke（阶段二，空场景，2026-11-11） | 33 帧、面板更新 17 次、latest_age 47 ms、worker 存活、分区对话框可开可关 | outputs/ui_smoke/；截图 ui_smoke.png；空场景无人属预期 |
 | 活动场景回放 | 8 个场景均通过 | `simulate` 子命令；详见 `5`、outputs/simulate_*.json |
 | 官方图片五指分类 | fist→fist；right_hands→open；woman_hands→左手 partial / 右手 pinch | 阶段一产物 outputs/snapshots/*.json |
 | UI 关闭退出 | 窗口立即关闭，进程约 4.7 s 退出 | 非阻塞 close + 入口 os._exit，无 40 s 卡顿 |
 | 空场景误检门限 | 修复前挂衣被判“后仰”（pitch −169°）；修复后 uncertain，活动 UNKNOWN | torso.py 的 plausible_pitch/roll_deg；新增单测 |
 | 真实侧身切菜视频（两状态） | 2.833 s 进入“正在切菜”，17.367 s 进入“切菜完成”，视频 18.333 s 结束前保持；p50 60.9 / p95 81.3 / max 103.3 ms，L0 | 551 帧、1280x720、30 fps；状态只切换 2 次；outputs/video_demo/ |
 | UI 视频演示 smoke | “正在切菜”与“切菜完成”各截图 1 张；右侧状态变化只有 2 条；面板与叠加层一致 | outputs/video_demo/ui_video_chopping.png / ui_video_done.png |
+| UI 视频导入/分区开关 smoke | 预览帧≥10；分区线/标记可隐藏与恢复；zones.json 写入 enabled；截图 3 张 | outputs/ui_smoke_video/；run_ui_export_smoke.py |
+| UI 导出 smoke | 30 帧 MP4 导出成功；按钮变“继续”，状态行提示完成；ffprobe 1280×720/30fps/mpeg4/30 帧 | outputs/ui_smoke_video/ui_export_test.mp4 |
+| CLI 全量导出 | 551 帧、1280×720、30 fps、18.37 s；状态/骨架/HUD 正常 | outputs/exports/cli_export_test.mp4；ffprobe 校验 |
+| CLI 4K 源导出（低分辨率优先） | 3840×2160/59.82 fps 输入 → 1280×720/29.909 fps、551 帧、18.42 s，用时 79.08 s | outputs/exports/cli_4k_export_test.mp4；ffprobe 校验 |
+| UI 右栏滚动布局 | 1280×900 摄像头与视频双手段下按钮/复选框/状态行均可见；内容区可滚动 | outputs/ui_smoke/ui_smoke.png、outputs/ui_smoke_video/ui_export_done.png |
+| 导出失败路径 | 缺失视频任务 state=failed、error 非空、不生成输出 | tests/test_export.py::test_export_missing_video_fails |
 | T5 独立验证（阶段一） | “有条件通过”，S2-1/S2-2 已修复并回归 | docs/verification_report.md |
 
 > 注：本机实测时若另一个进程占用摄像头，read 会阻塞约 1 s/帧，导致 wall-clock FPS 降低但不影响单帧处理耗时统计；跑 benchmark 前请关闭其它用摄像头的程序。
@@ -135,12 +155,13 @@ py -3.12 -X utf8 -m kitchen_perception benchmark --frames 300 --json outputs/ben
 | A2 躯干识别 | 通过（静态图 + UI 实测） | pose.jpg upright；单测覆盖 5 状态 + 滞回；近景特写构图风险已写入已知限制 |
 | A3 五指识别 | 通过（官方图端到端） | fist→fist、right_hands→open、woman_hands→partial/pinch；单测覆盖五指枚举 |
 | A4 实时性 | 通过 | 阶段二 benchmark p95 69.79 ms（≤250）；UI smoke p95 约 71 ms |
-| A5 工程交付 | 通过 | git 提交；verify_all.ps1；便携包；98 项测试 10.8 s |
+| A5 工程交付 | 通过 | git 提交；verify_all.ps1；便携包；103 项测试 14.5 s |
 | A6 可扩展性 | 通过 | config/default.json 阈值/标签；custom_rules.py 钩子 + 单测 |
 | A7 A/B 分区 | 通过（单测 + UI 对话框 smoke） | test_zones 14 项；分区设置保存/重读；镜像坐标单测 |
 | A8 切菜/活动状态 | 通过（1 段侧身视频 + 合成场景；全厨房待复核） | test_motion 7 项、test_activity 10 项、test_simulate 4 项；8 场景回放；真实视频见 5.1 |
 | A9 事件与界面 | 通过 | JSONL 单测 4 项；UI 事件日志 smoke；快照 schema 1.1 字段齐全 |
 | A10 两状态视频演示 | 通过（本机样例） | 2.833 s 正在切菜、17.367 s 切菜完成；UI 两状态截图；outputs/video_demo/ |
+| A11 视频导入/导出与分区开关 | 通过（UI smoke + CLI 全量/4K 导出） | 导入视频预览、30 帧 UI 导出、551 帧 CLI 导出、4K 源自动降到 1280×720；zones.enabled 持久化；test_export 4 项 |
 
 ## 7. 已知限制与待复核项
 
@@ -152,5 +173,6 @@ py -3.12 -X utf8 -m kitchen_perception benchmark --frames 300 --json outputs/ben
 6. **摄像头独占**：同一摄像头同一时间只能被一个进程稳定读取。
 7. **离线遥测**：MediaPipe 退出时会尝试上传 Clearcut，已用非阻塞 close + `os._exit` 规避。
 8. **性能与分辨率**：640×480 CPU 实测 p95 约 70 ms；换更高分辨率或更慢的演示机时，程序会自动降级，必要时调整 `config/default.json` 的 `latency.levels`。
-9. **UI 自适应**：窗口会按屏幕分辨率收缩，但 1280×800 以下屏幕右侧面板可能需要滚动；演示机建议 1366×768 以上。
+9. **UI 自适应**：窗口会按屏幕分辨率收缩；右侧内容区可滚动，底部按钮/分区复选框/状态行固定可见；演示机建议 1366×768 以上。
 10. **两状态演示依赖切菜节奏**：只回答“正在切/切完”，不判断切什么、切多少；切菜节奏的阈值用 demo 节单独配置，与阶段二 activity 的阈值相互独立。
+11. **视频导出无音轨且慢于实时**：mp4v 静音输出，避免演示机安装 ffmpeg；本机 18 s/720p 视频约 56 s 导出，4K 源先缩到 1280 处理（约 79 s，4K 解码较慢）。需要音频可在导出后用原视频合成。

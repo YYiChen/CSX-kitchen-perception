@@ -7,6 +7,11 @@
   BGR ndarray -> PIL -> ImageTk 的显示缩放。
 - 界面不重复实现检测/阈值逻辑；中文标签、窗口标题、轮询间隔都来自 config 与 snapshot。
 
+视频源：
+- 启动时默认用摄像头；也可以在界面里导入视频、查看带标注的识别结果；
+- 「导出标注视频」把当前导入的视频重新逐帧跑一遍 Pipeline 并写成 MP4，
+  进度显示在底部状态栏。
+
 暂停语义：
 - 「暂停」调用 worker.set_paused(True)：后台线程退出并释放摄像头，画面停在最后一帧；
 - 「继续」调用 worker.start()：重新打开采集（摄像头重新打开，视频从头播放）。
@@ -23,15 +28,17 @@ from pathlib import Path
 from typing import Optional
 
 import tkinter as tk
+from tkinter import filedialog
 
 from PIL import Image, ImageTk
 
 from .config import Config
+from .exporter import VideoExportJob
 from .fingers import FINGER_ORDER, FINGER_ZH
 from .media_io import bgr_to_pil, ensure_dir, imwrite_u
 from .overlay import FACING_ZH
 from .worker import PerceptionWorker
-from .zones import ZoneSettings, save_settings, zones_file
+from .zones import ZoneSettings, load_settings, save_settings, zones_file
 
 LOGGER = logging.getLogger(__name__)
 
@@ -177,6 +184,11 @@ class KitchenUI:
         self._demo_history: list[tuple[str, str]] = []
         self._last_demo_state: Optional[str] = None
         self._last_demo_event_zh = "--"
+        self._zone_enabled = self._read_zone_enabled()
+        self.export_job: Optional[VideoExportJob] = None
+        self._export_last_percent: Optional[int] = None
+        self._export_status_text = ""
+        self._last_export_path: Optional[Path] = None
 
         self.root = tk.Tk()
         self.root.title(str(config.get("ui.title", "厨房情境感知 · 阶段一")))
@@ -195,6 +207,7 @@ class KitchenUI:
 
         self._build_widgets()
         self._bind_keys()
+        self._update_source_label()
 
         # 视频路径先做一次存在性检查：worker 对视频打不开只会静默结束，界面必须自己给出原因
         if self.video and not Path(self.video).expanduser().exists():
@@ -227,16 +240,64 @@ class KitchenUI:
         main = tk.Frame(self.root, bg=BG)
         main.pack(fill="both", expand=True, padx=8, pady=8)
 
-        # 左：叠加画面（占满剩余空间，等比缩放）
-        self.preview_label = tk.Label(
-            main, bg=BG_PREVIEW, fg="#bbbbbb", text="等待画面…", font=self._font(16)
+        # 左：视频源工具栏 + 叠加画面（占满剩余空间，等比缩放）
+        left = tk.Frame(main, bg=BG)
+        left.pack(side="left", fill="both", expand=True)
+        source_bar = tk.Frame(left, bg=BG)
+        source_bar.pack(fill="x", pady=(0, 6))
+        self.source_label = tk.Label(
+            source_bar,
+            text="视频源：摄像头",
+            font=self._font(10),
+            fg="#333333",
+            bg=BG,
+            anchor="w",
         )
-        self.preview_label.pack(side="left", fill="both", expand=True)
+        self.source_label.pack(side="left", padx=(2, 8))
+        self.export_button = tk.Button(
+            source_bar, text="导出标注视频…", command=self._export_video, font=self._font(10)
+        )
+        self.export_button.pack(side="right", padx=(4, 0))
+        self.camera_button = tk.Button(
+            source_bar, text="回到摄像头", command=self._use_camera, font=self._font(10)
+        )
+        self.camera_button.pack(side="right", padx=(4, 0))
+        self.import_button = tk.Button(
+            source_bar, text="导入视频…", command=self._import_video, font=self._font(10)
+        )
+        self.import_button.pack(side="right", padx=(4, 0))
+
+        self.preview_label = tk.Label(
+            left, bg=BG_PREVIEW, fg="#bbbbbb", text="等待画面…", font=self._font(16)
+        )
+        self.preview_label.pack(fill="both", expand=True)
         self.preview_label.bind("<Configure>", self._on_preview_resize)
 
-        # 右：状态面板
-        panel = tk.Frame(main, bg=BG)
-        panel.pack(side="right", fill="y", padx=(8, 0))
+        # 右：状态面板（放在 Canvas 里，窗口较矮或手部信息较多时可滚动）
+        panel_outer = tk.Frame(main, bg=BG, width=380)
+        panel_outer.pack(side="right", fill="y", padx=(8, 0))
+        panel_outer.pack_propagate(False)
+        status_bar = tk.Frame(panel_outer, bg=BG)
+        status_bar.pack(side="bottom", fill="x")
+        controls_bar = tk.Frame(panel_outer, bg=BG)
+        controls_bar.pack(side="bottom", fill="x")
+        panel_canvas = tk.Canvas(panel_outer, bg=BG, highlightthickness=0, width=364)
+        panel_scrollbar = tk.Scrollbar(panel_outer, orient="vertical", command=panel_canvas.yview)
+        panel_scrollbar.pack(side="right", fill="y")
+        panel_canvas.pack(side="left", fill="both", expand=True)
+        panel = tk.Frame(panel_canvas, bg=BG)
+        panel_window = panel_canvas.create_window((0, 0), window=panel, anchor="nw")
+        panel_canvas.configure(yscrollcommand=panel_scrollbar.set)
+        panel.bind(
+            "<Configure>",
+            lambda _event: panel_canvas.configure(scrollregion=panel_canvas.bbox("all")),
+        )
+        panel_canvas.bind(
+            "<Configure>",
+            lambda event: panel_canvas.itemconfigure(
+                panel_window, width=max(1, event.width)
+            ),
+        )
         panel.grid_columnconfigure(0, weight=1)
         row = 0
 
@@ -384,7 +445,7 @@ class KitchenUI:
         log_inner.pack(fill="both", expand=True)
         self.event_text = tk.Text(
             log_inner,
-            height=6,
+            height=4,
             width=42,
             font=self._font(9),
             state="disabled",
@@ -401,11 +462,10 @@ class KitchenUI:
         event_scroll.pack(side="right", fill="y")
 
         # 按钮
-        buttons = tk.Frame(panel, bg=BG)
-        buttons.grid(row=row, column=0, sticky="ew", pady=(4, 2))
+        buttons = tk.Frame(controls_bar, bg=BG)
+        buttons.pack(fill="x", pady=(4, 2))
         buttons.grid_columnconfigure(0, weight=1)
         buttons.grid_columnconfigure(1, weight=1)
-        row += 1
         self.pause_button = tk.Button(
             buttons, text="暂停", command=self._toggle_pause, font=self._font(10)
         )
@@ -431,9 +491,26 @@ class KitchenUI:
         )
         self.save_zone_button.grid(row=2, column=1, sticky="ew", padx=(3, 0), pady=2)
 
+        self.zone_enabled_var = tk.BooleanVar(value=bool(self._zone_enabled))
+        self.zone_enabled_check = tk.Checkbutton(
+            buttons,
+            text="显示 A/B 分区线和标记",
+            variable=self.zone_enabled_var,
+            command=self._toggle_zone_display,
+            font=self._font(9),
+            fg="#333333",
+            bg=BG,
+            activebackground=BG,
+            selectcolor=BG_PANEL,
+            anchor="w",
+            bd=0,
+            highlightthickness=0,
+        )
+        self.zone_enabled_check.grid(row=3, column=0, columnspan=2, sticky="w", padx=2, pady=(4, 0))
+
         self.action_label = tk.Label(
-            panel,
-            text="快捷键：空格 暂停/继续 · Z 分区设置 · C 标定 · R 清除标定 · S 保存快照 · Q/Esc 退出",
+            status_bar,
+            text="快捷键：空格 暂停/继续 · Z 分区设置 · C 标定 · R 清除标定 · S 保存快照 · Ctrl+O 导入 · Ctrl+E 导出 · Q/Esc 退出",
             font=self._font(9),
             fg="#0b5cad",
             bg=BG,
@@ -441,10 +518,9 @@ class KitchenUI:
             justify="left",
             anchor="w",
         )
-        self.action_label.grid(row=row, column=0, sticky="ew", pady=(2, 0))
-        row += 1
+        self.action_label.pack(fill="x", pady=(2, 0))
         self.status_label = tk.Label(
-            panel,
+            status_bar,
             text="正在启动…",
             font=self._font(9),
             fg=COLOR_MUTED,
@@ -453,9 +529,7 @@ class KitchenUI:
             justify="left",
             anchor="w",
         )
-        self.status_label.grid(row=row, column=0, sticky="ew", pady=(2, 0))
-        row += 1
-        panel.grid_rowconfigure(row, weight=1)
+        self.status_label.pack(fill="x", pady=(2, 0))
 
     def _bind_keys(self) -> None:
         self.root.bind("<Escape>", lambda _event: self.close())
@@ -465,6 +539,8 @@ class KitchenUI:
         self.root.bind("<KeyPress-r>", lambda _event: self._clear_calibration())
         self.root.bind("<KeyPress-s>", lambda _event: self._save_snapshot())
         self.root.bind("<KeyPress-z>", lambda _event: self._open_zone_dialog())
+        self.root.bind("<Control-o>", lambda _event: self._import_video())
+        self.root.bind("<Control-e>", lambda _event: self._export_video())
 
     def _set_buttons_enabled(self, enabled: bool) -> None:
         state = "normal" if enabled else "disabled"
@@ -501,6 +577,7 @@ class KitchenUI:
 
     # ------------------------------------------------------------------ 启动/关闭
     def _start_worker(self) -> None:
+        self._started_at = time.monotonic()
         worker = PerceptionWorker(
             self.config,
             source_kind="video" if self.video else "camera",
@@ -519,6 +596,282 @@ class KitchenUI:
             return
         self._set_status("正在启动感知线程（首次加载模型约 1–3 秒）…")
 
+    # ------------------------------------------------------------------ 视频源切换
+    def _update_source_label(self) -> None:
+        exporting = self.export_job is not None and self.export_job.is_running()
+        if self.video:
+            self.source_label.configure(text=f"视频源：{Path(self.video).name}（视频）")
+        else:
+            self.source_label.configure(text=f"视频源：摄像头 {self.index}")
+        if exporting:
+            self.import_button.configure(state="disabled")
+            self.camera_button.configure(state="disabled")
+            self.export_button.configure(state="normal", text="取消导出")
+        else:
+            self.import_button.configure(state="normal")
+            self.export_button.configure(text="导出标注视频…")
+            self.export_button.configure(state="normal" if self.video else "disabled")
+            self.camera_button.configure(state="normal" if self.video else "disabled")
+
+    def _read_zone_enabled(self) -> bool:
+        try:
+            settings, _, _ = load_settings(self.config)
+            return bool(settings.enabled)
+        except Exception:
+            LOGGER.warning("读取分区显示开关失败，使用配置默认值", exc_info=True)
+            return bool(self.config.get("zones.enabled", True))
+
+    def _reset_view_state(self) -> None:
+        self.last_snapshot = None
+        self.last_overlay = None
+        self._preview_index = -1
+        self._panel_index = -1
+        self._last_error_text = ""
+        self._startup_error = None
+        self._paused = False
+        self._resuming = False
+        self._resume_attempts = 0
+        self._video_ended = False
+        self._last_demo_state = None
+        self._last_demo_event_zh = "--"
+        self._demo_history.clear()
+        self._event_log_sig = None
+        self._export_status_text = ""
+        self._export_last_percent = None
+        if self._resume_after_id is not None:
+            try:
+                self.root.after_cancel(self._resume_after_id)
+            except tk.TclError:
+                pass
+            self._resume_after_id = None
+        self._hide_error()
+        self.pause_button.configure(text="暂停", state="normal")
+        self.preview_label.configure(image="", text="正在打开…")
+        self._last_pil = None
+        self._photo = None
+        self.activity_label.configure(text="等待切菜", fg=COLOR_UNKNOWN)
+        self.activity_info_label.configure(text="正在等待切菜动作")
+        self.chopping_label.configure(text="把手和菜刀放进画面，做反复抬起/放下的切菜动作")
+        self.last_event_label.configure(text="最近状态：--")
+        self.torso_label.configure(text="等待画面…", fg=COLOR_UNKNOWN)
+        self.torso_conf_label.configure(text="置信度：--")
+        self.angle_label.configure(text="前倾 --   侧倾 --   转向 --\n朝向：--")
+        self.fps_label.configure(text="FPS：--")
+        self.p95_label.configure(text="延迟 p95：--")
+        self.level_label.configure(text="降级级别：--   当前帧 -- ms")
+        self.event_text.configure(state="normal")
+        self.event_text.delete("1.0", "end")
+        self.event_text.configure(state="disabled")
+        self._set_status("正在打开视频源…")
+        self._set_action("正在打开视频源…")
+
+    def _stop_worker_blocking(self) -> None:
+        worker = self.worker
+        if worker is None:
+            return
+        try:
+            worker.stop(timeout=6.0)
+        except Exception:
+            LOGGER.warning("停止旧感知线程失败", exc_info=True)
+        self.worker = None
+
+    def _switch_source(self, video: Optional[str]) -> None:
+        if self.export_job is not None and self.export_job.is_running():
+            self._set_action("视频导出进行中，请等待完成或取消后再切换视频源")
+            return
+        self._stop_worker_blocking()
+        self.video = str(video) if video else None
+        self._reset_view_state()
+        self._update_source_label()
+        if self.video and not Path(self.video).expanduser().exists():
+            self._startup_error = f"视频文件不存在：{self.video}"
+            self._label_error(self._startup_error)
+            self._set_status("视频源未启动（视频文件不存在）")
+            self._set_buttons_enabled(False)
+            return
+        self._start_worker()
+
+    def _import_video(self) -> None:
+        if self.export_job is not None and self.export_job.is_running():
+            self._set_action("视频导出进行中，请等待完成或取消后再导入视频")
+            return
+        initial = Path.cwd()
+        if self.video:
+            try:
+                initial = Path(self.video).expanduser().parent
+            except (OSError, ValueError):
+                initial = Path.cwd()
+        path = filedialog.askopenfilename(
+            parent=self.root,
+            title="导入用于识别的视频",
+            initialdir=str(initial),
+            filetypes=[
+                ("视频文件", "*.mp4 *.avi *.mov *.mkv *.wmv"),
+                ("所有文件", "*.*"),
+            ],
+        )
+        if not path:
+            return
+        self._switch_source(path)
+        self._set_action(f"已导入视频：{Path(path).name}，正在加载…")
+
+    def _use_camera(self) -> None:
+        if self.video is None:
+            return
+        self._switch_source(None)
+        self._set_action(f"已切回摄像头 {self.index}")
+
+    # ------------------------------------------------------------------ 视频导出
+    def _export_video(self) -> None:
+        job = self.export_job
+        if job is not None and job.is_running():
+            job.cancel()
+            self._set_action("正在取消视频导出…")
+            return
+        if not self.video:
+            self._set_action("请先点「导入视频…」，再导出带标注的 MP4")
+            return
+
+        export_dir = self.config.resolve_path(self.config.get("video.export_dir", "outputs/exports"))
+        try:
+            ensure_dir(export_dir)
+        except OSError as exc:
+            self._set_action(f"导出失败：无法创建目录 {export_dir}（{exc}）")
+            return
+        stem = Path(self.video).stem
+        stamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())
+        default_name = f"{stem}_annotated_{stamp}.mp4"
+        output = filedialog.asksaveasfilename(
+            parent=self.root,
+            title="导出带标注的 MP4",
+            initialdir=str(export_dir),
+            initialfile=default_name,
+            defaultextension=".mp4",
+            filetypes=[("MP4 视频", "*.mp4")],
+        )
+        if not output:
+            return
+        if not output.lower().endswith(".mp4"):
+            output += ".mp4"
+
+        zone_settings: Optional[dict] = None
+        worker = self.worker
+        if worker is not None and worker.pipeline is not None:
+            try:
+                zone_settings = worker.zone_settings()
+            except Exception:
+                zone_settings = None
+        if zone_settings is None:
+            try:
+                zone_settings = load_settings(self.config)[0].to_dict()
+            except Exception:
+                zone_settings = None
+
+        # 导出和实时预览各跑一份 Pipeline 会争抢 MediaPipe；导出前先释放预览线程。
+        if worker is not None:
+            try:
+                worker.stop(timeout=6.0)
+            except Exception:
+                LOGGER.warning("导出前停止感知线程失败", exc_info=True)
+        self._paused = True
+        self._video_ended = False
+        self._export_status_text = ""
+        self._export_last_percent = None
+        self.pause_button.configure(text="继续", state="disabled")
+
+        self.export_job = VideoExportJob(
+            self.config,
+            self.video,
+            output,
+            zone_settings=zone_settings,
+        )
+        try:
+            self.export_job.start()
+        except Exception as exc:
+            self.export_job = None
+            self.pause_button.configure(text="继续", state="normal")
+            self._set_action(f"导出失败：{type(exc).__name__}: {exc}")
+            return
+        self._update_source_label()
+        self._set_action("正在导出标注视频…")
+        self._set_status("正在导出标注视频…")
+
+    def _poll_export(self) -> None:
+        job = self.export_job
+        if job is None:
+            return
+        status = job.status()
+        state = str(status.get("state") or "idle")
+        frames = int(status.get("frames") or 0)
+        total = int(status.get("total_frames") or 0)
+        if state == "running":
+            progress = status.get("progress")
+            if progress is None:
+                text = f"正在导出标注视频… 已处理 {frames} 帧"
+                percent = None
+            else:
+                percent = int(round(float(progress) * 100))
+                text = f"正在导出标注视频… {percent}%（{frames}/{total} 帧）"
+            if percent != self._export_last_percent:
+                self._export_last_percent = percent
+                self._set_action(text)
+                self._set_status(text)
+            return
+
+        self.export_job = None
+        self._export_last_percent = None
+        self.pause_button.configure(text="继续", state="normal")
+        self._update_source_label()
+        if state == "done":
+            path = Path(str(status.get("output_path") or ""))
+            self._last_export_path = path
+            self._export_status_text = "导出完成；点「继续」可重新播放视频"
+            self._set_action(f"已导出标注视频：{path}（{frames} 帧）")
+            self._set_status(self._export_status_text)
+        elif state == "cancelled":
+            self._export_status_text = "已取消导出；点「继续」可重新播放视频"
+            self._set_action("已取消视频导出")
+            self._set_status(self._export_status_text)
+        else:
+            error = str(status.get("error") or "未知错误")
+            self._export_status_text = "视频导出失败"
+            self._label_error(f"视频导出失败：{error}")
+            self._set_action("视频导出失败（见上方错误）")
+            self._set_status(self._export_status_text)
+
+    # ------------------------------------------------------------------ 分区显示开关
+    def _toggle_zone_display(self) -> None:
+        enabled = bool(self.zone_enabled_var.get())
+        worker = self.worker
+        try:
+            if worker is not None and worker.pipeline is not None:
+                data = worker.zone_settings() or self._zone_data_from_snapshot()
+                data["enabled"] = enabled
+                worker.apply_zone_settings(data, persist=True)
+            else:
+                settings, _, _ = load_settings(self.config)
+                data = settings.to_dict()
+                data["enabled"] = enabled
+                save_settings(zones_file(self.config), ZoneSettings.from_dict(data))
+            self._zone_enabled = enabled
+            self._set_action(
+                "已显示 A/B 分区线和标记（设置已保存）"
+                if enabled
+                else "已隐藏 A/B 分区线和标记（设置已保存）"
+            )
+        except Exception as exc:
+            self.zone_enabled_var.set(not enabled)
+            self._set_action(f"切换分区显示失败：{type(exc).__name__}: {exc}")
+
+    def _sync_zone_check(self, snapshot: dict) -> None:
+        zones = snapshot.get("zones") if isinstance(snapshot, dict) else None
+        if not isinstance(zones, dict) or "enabled" not in zones:
+            return
+        enabled = bool(zones.get("enabled"))
+        self._zone_enabled = enabled
+        if bool(self.zone_enabled_var.get()) != enabled:
+            self.zone_enabled_var.set(enabled)
+
     def run(self) -> None:
         self.root.mainloop()
 
@@ -526,6 +879,13 @@ class KitchenUI:
         if self._closed:
             return
         self._closed = True
+        if self.export_job is not None:
+            try:
+                self.export_job.cancel()
+                self.export_job.wait(timeout=2.0)
+            except Exception:
+                LOGGER.warning("关闭时停止视频导出失败", exc_info=True)
+            self.export_job = None
         if self._zone_dialog is not None:
             try:
                 self._zone_dialog.destroy()
@@ -569,8 +929,11 @@ class KitchenUI:
                 self._after_id = self.root.after(self.poll_ms, self._tick)
 
     def _refresh(self) -> None:
+        self._poll_export()
         worker = self.worker
         if worker is None:
+            if self._export_status_text:
+                self._set_status(self._export_status_text)
             return
         latest = worker.get_latest()
         if latest is not None:
@@ -613,7 +976,12 @@ class KitchenUI:
             self._video_ended = True
             self._paused = True
             self.pause_button.configure(text="继续")
-        self._set_status(self._status_text(worker))
+        if self.export_job is not None:
+            pass  # 导出进行中，_poll_export 已更新进度
+        elif self._export_status_text:
+            self._set_status(self._export_status_text)
+        else:
+            self._set_status(self._status_text(worker))
 
     def _status_text(self, worker: PerceptionWorker) -> str:
         if self._resuming:
@@ -680,6 +1048,7 @@ class KitchenUI:
 
     # ------------------------------------------------------------------ 面板更新
     def _update_panel(self, snapshot: dict) -> None:
+        self._sync_zone_check(snapshot)
         torso = snapshot.get("torso") or {}
         posture = str(torso.get("posture") or "unknown")
         posture_zh = str(torso.get("posture_zh") or posture)
@@ -731,7 +1100,7 @@ class KitchenUI:
             grip = str(hand.get("grip_zh") or hand.get("grip") or "未知")
             notes: list[str] = []
             zone = str(hand.get("zone") or "unknown")
-            if zone in ("A", "B"):
+            if zone in ("A", "B") and self._zone_enabled:
                 notes.append(f"{zone} 区")
             if hand.get("in_workspace"):
                 notes.append("在操作区")
@@ -886,6 +1255,7 @@ class KitchenUI:
         zones = (self.last_snapshot or {}).get("zones") or {}
         labels = zones.get("labels") if isinstance(zones.get("labels"), dict) else {}
         return {
+            "enabled": bool(zones.get("enabled", self._zone_enabled)),
             "split_x": zones.get("split_x", self.config.get("zones.split_x", 0.5)),
             "deadband": zones.get("deadband", self.config.get("zones.deadband", 0.02)),
             "ema_alpha": self.config.get("zones.ema_alpha", 0.35),
@@ -1050,6 +1420,7 @@ class KitchenUI:
                 except Exception:
                     base = {}
             data = {
+                "enabled": bool(self.zone_enabled_var.get()),
                 "split_x": split,
                 "deadband": deadband,
                 "ema_alpha": float(base.get("ema_alpha", self.config.get("zones.ema_alpha", 0.35))),
@@ -1066,6 +1437,7 @@ class KitchenUI:
             else:
                 raise RuntimeError("感知线程尚未就绪，只能先保存到配置文件")
             error_label.configure(text="")
+            self._zone_enabled = bool(self.zone_enabled_var.get())
             self._set_action(action)
         except Exception as exc:
             message = f"{type(exc).__name__}: {exc}"
@@ -1097,6 +1469,9 @@ class KitchenUI:
 
     # ------------------------------------------------------------------ 按钮动作
     def _toggle_pause(self) -> None:
+        if self.export_job is not None and self.export_job.is_running():
+            self._set_action("视频导出进行中，完成或取消后才能继续采集")
+            return
         worker = self.worker
         if worker is None:
             self._set_action("感知线程未启动，无法暂停")
@@ -1146,6 +1521,7 @@ class KitchenUI:
         self._resuming = False
         self._paused = False
         self._video_ended = False
+        self._export_status_text = ""
         self.pause_button.configure(text="暂停", state="normal")
         self._set_action("已继续采集")
 

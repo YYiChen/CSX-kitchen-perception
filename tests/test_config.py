@@ -9,7 +9,7 @@ from kitchen_perception.config import DEFAULT_CONFIG_PATH, Config, load_config
 class TestConfig(unittest.TestCase):
     def test_default_config_sections(self):
         config = load_config()
-        for section in ("project", "models", "camera", "inference", "torso", "hands", "motion", "zones", "chopping", "activity", "demo", "latency", "ui", "output", "logging"):
+        for section in ("project", "models", "camera", "video", "inference", "torso", "hands", "motion", "zones", "chopping", "activity", "demo", "latency", "ui", "output", "logging"):
             self.assertIsInstance(config.section(section), dict)
 
     def test_dotted_get_and_default(self):

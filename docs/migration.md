@@ -9,6 +9,7 @@
 - `models/MANIFEST.json` 记录每个模型的 bytes/sha256/下载 URL；换机后可 `scripts/download_models.py` 重新下载并校验
 - 阶段二新增源码：`zones.py`、`motion.py`、`activity.py`、`events.py`；配置 `config/default.json` 增加 `zones/chopping/activity/logging` 段；用户分区配置写到 `config/zones.json`（可选，删除即恢复默认）
 - 两状态演示新增源码：`demo.py`；配置 `config/default.json` 增加 `demo` 段；UI 主面板显示“等待切菜/正在切菜/切菜完成”，不新增依赖
+- 视频导入/导出新增源码：`exporter.py`；配置 `config/default.json` 增加 `video` 段（max_width/max_fps/export_max_width/export_max_fps/export_dir）；`ZoneSettings` 增加 `enabled`；`cli.py` 增加 `export-video` 子命令。导出只用 OpenCV mp4v，不需要 ffmpeg/额外编码器
 
 ## 2. 目标机准备
 
@@ -28,7 +29,7 @@
    py -3.12 -X utf8 -m kitchen_perception verify-models
    py -3.12 -X utf8 scripts\check_env.py
    ```
-   测试请用 `py -3.12 -X utf8 tests\run_tests.py`（演示版 **98 项，约 11 秒**）。不要用 `python -m unittest` 直接跑全套：
+   测试请用 `py -3.12 -X utf8 tests\run_tests.py`（演示版 **103 项，约 15 秒**）。不要用 `python -m unittest` 直接跑全套：
    MediaPipe 在离线网络下退出时会同步尝试上传遥测，每个 landmarker 会多等约 42 秒，虽然能跑完但很慢。
 5. 启动：
    ```powershell
@@ -82,18 +83,20 @@ bundle 含全部提交历史（不含未跟踪的 `outputs/`）；与便携包�
 3. **摄像头独占**：同一摄像头同一时间只能被一个进程稳定读取；演示前关掉其它用摄像头的程序（含旧窗口）。
 4. **Python 版本**：只在 3.12.10 上实测；3.11 理论上可用但未实测，不建议演示机换版本。
 5. **编码**：`scripts/*.ps1` 以 UTF-8 BOM 保存，Windows PowerShell 5.1 才能正确解析中文注释。
-6. **分区配置**：`config/zones.json` 是用户运行产物，git 不跟踪；迁移时不带它就会用 `config/default.json` 的默认 `split_x=0.5`。若演示机需要固定分割线，可在 UI 里重新保存，或手动拷贝该文件。
+6. **分区配置**：`config/zones.json` 是用户运行产物，git 不跟踪；迁移时不带它就会用 `config/default.json` 的默认 `split_x=0.5`、分区线显示。若演示机需要固定分割线/开关状态，可在 UI 里重新保存，或手动拷贝该文件。
 7. **屏幕分辨率**：UI 以 1280×900 为设计基准，实际窗口会按屏幕收缩；演示机建议 1366×768 以上。
+8. **视频导出**：只用 OpenCV mp4v，无音轨、不需要 ffmpeg；导出是离线逐帧处理，比实时慢。输出目录由 `video.export_dir`（默认 outputs/exports）控制，输出文件不进 git。
 
 ## 7. 迁移后自检清单
 
 - [ ] `verify-models` 通过
 - [ ] `check_env.py` 显示摄像头可用、依赖版本正常
 - [ ] `snapshot --image assets/test/official/pose.jpg` 输出 posture 字段非空
-- [ ] `tests/run_tests.py` 98 项全部通过
+- [ ] `tests/run_tests.py` 103 项全部通过（含视频导出合成测试）
 - [ ] `snapshot --image assets/test/official/fist.png` 输出 grip=fist
 - [ ] 打开 UI 能看到画面与实时状态
 - [ ] 用 `ui --video <侧身切菜视频>` 能看到“正在切菜”与“切菜完成”两个状态，且状态变化只有两条
 - [ ] `simulate --scenario a_to_b` 输出 ACTIVE_A → TRANSITION_A_TO_B → ACTIVE_B
 - [ ] 打开“分区设置…”能改分割线并保存，重启后保持
+- [ ] 界面里「导入视频…」能切换视频源；「导出标注视频…」能生成 1280 宽标注 MP4（无音轨）；「显示 A/B 分区线」开关能隐藏/恢复并持久化
 - [ ] `benchmark --frames 100` 的 p95 ≤ 500 ms（若超出，程序会自动降级，必要时在 config 调整 `latency.levels`）

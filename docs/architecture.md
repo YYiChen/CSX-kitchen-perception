@@ -29,9 +29,12 @@ Pipeline.process
                  │
                  ├─ OverlayRenderer.render → 叠加帧（骨架+手部+A/B 分区+HUD）
                  └─ UI（PerceptionWorker 线程） / CLI / JSONL / 快照文件
+                          │
+                          └─ VideoExportJob（独立后台线程，导出时暂停预览）
+                               └─ 逐帧标注 → mp4v MP4（无音轨）
 ```
 
-线程模型：UI 主线程只做 Tkinter 绘制与按钮；`PerceptionWorker` 后台线程独占摄像头与 MediaPipe 对象（MediaPipe Tasks 非线程安全）。UI 通过 `worker.apply_zone_settings()` 把分区配置交给后台线程，不直接碰 MediaPipe。
+线程模型：UI 主线程只做 Tkinter 绘制与按钮；`PerceptionWorker` 后台线程独占摄像头与 MediaPipe 对象（MediaPipe Tasks 非线程安全）。UI 通过 `worker.apply_zone_settings()` 把分区配置交给后台线程，不直接碰 MediaPipe。视频导出时 UI 先停掉预览 worker，再由 `VideoExportJob` 线程创建独立 `Pipeline`，避免两份 MediaPipe 图同时运行。
 
 ## 3. 模块职责
 
@@ -50,8 +53,9 @@ Pipeline.process
 | overlay.py | 骨架绘制、五指状态着色、A/B 分区、中文 HUD、镜像预览 |
 | pipeline.py | 组合推理、分区/活动/事件、降级调度、快照、标定持久化 |
 | worker.py | 后台采集/推理线程，供 UI 轮询最新结果与读取事件 |
-| ui.py | Tkinter 桌面界面（情境感知/事件日志/分区设置） |
-| cli.py | verify-models / probe-cameras / ui / run / benchmark / snapshot / simulate |
+| exporter.py | 后台视频导出：逐帧跑 Pipeline、写带标注 MP4、进度/取消/错误状态 |
+| ui.py | Tkinter 桌面界面（摄像头/视频源切换、情境感知、事件日志、分区设置与开关、视频导出） |
+| cli.py | verify-models / probe-cameras / ui / run / benchmark / snapshot / simulate / export-video |
 | custom_rules.py | 按炒菜环节覆盖躯干/手指定义的扩展点 |
 
 ## 4. 躯干状态定义
@@ -97,6 +101,20 @@ Pipeline.process
 - **平滑/确认**：身体重心 EMA(`ema_alpha=0.35`)；候选区连续 `enter_ms=300` 才提交，避免边界抖动
 - **配置**：`config/default.json → zones`；界面保存后写 `config/zones.json`（字段 split_x / deadband / ema_alpha / enter_ms / labels），下次启动由 `load_settings` 覆盖默认值
 - **输出**：snapshot.zones 含 split_x/deadband/view_mirrored/labels/body_center_norm/body_zone/zone_source/zone_confidence/hand_zone_mismatch/hands/warnings；HandState 增加 palm_norm/zone/zone_code
+
+## 6.5 视频导入、显示开关与导出（2026-11-11）
+
+界面支持两种视频源：摄像头（默认）与本地视频。视频源切换由 UI 先停掉旧 `PerceptionWorker`，再按新源重建；视频帧按 `video.max_width` 等比缩放（默认 1280），并按 `video.max_fps`（默认 30）抽帧，源 60 fps 时步长为 2。视频结束不会自动循环，界面进入“已暂停”，点「继续」从头播放。
+
+`VideoExportJob` 是独立后台任务，构造参数为 config、输入视频、输出路径、`max_width`、`max_fps`、`zone_settings`、`max_frames`；其 `status()` 返回 state/frames/total_frames/progress/fps/stride/elapsed_s/output_path/error。导出流程：
+
+1. UI 停预览 worker，读取当前分区设置（含 enabled）传给导出任务；
+2. 导出线程创建 `VideoFileSource` + `Pipeline(enable_overlay=True)`，与预览共用同一套标注/状态逻辑；
+3. 逐帧抽帧、缩放、处理，写 mp4v MP4；输出 fps = 源 fps / 抽帧步长，宽高取偶；
+4. 先写 ASCII 临时文件，完成后移动到目标路径（支持中文路径）；取消或失败时清理临时目录；
+5. 输出无音轨，不依赖 ffmpeg/额外编码器。
+
+分区显示开关是 `ZoneSettings.enabled`（默认 true），随 `config/zones.json` 持久化；`ZoneManager.update()` 会把 enabled 写进 snapshot.zones，`OverlayRenderer.render()` 在 enabled=false 时跳过分割线、A/B 底色和手部区域标记，但后台判区仍继续计算，便于以后只隐藏视觉提示而不影响活动状态。
 
 ## 7. 切菜节奏（阶段二）
 
@@ -179,6 +197,7 @@ Detected 直接复用 HandMotionTracker 的 MotionFeatures，判定条件为：r
 | perf.fps | float | 估计帧率 |
 | perf.stale_pose / stale_hands | bool | 本帧是否复用了上次推理 |
 | zones.split_x / deadband | float | 显示画面归一化分割线/死区 |
+| zones.enabled | bool | 是否在叠加层显示分区线和标记（不影响后台判区） |
 | zones.view_mirrored | bool | 当前预览是否镜像 |
 | zones.labels | dict | A/B 中文标签 |
 | zones.body_center_norm | list[2]? | 平滑后的身体重心（显示坐标） |
@@ -237,6 +256,10 @@ Detected 直接复用 HandMotionTracker 的 MotionFeatures，判定条件为：r
 15. **无摄像头验证路径**：`simulate` 用合成观测序列覆盖状态机分支；真实摄像头只做空场景/单人 smoke。真人切菜准确率标“待复核”，不伪造。
 
 16. **演示层与活动状态机解耦**：需求收窄为“只显示正在切菜/切菜完成”，因此新增独立 DemoStateTracker，而不是改 activity 的状态枚举；旧状态机保留给后续阶段，演示面板只取两状态，且复用 motion 特征避免重复造轮子。
+
+17. **视频导出用独立 Pipeline、暂停预览**：MediaPipe Tasks 对象不能跨线程共用，两个 Pipeline 同时跑也会争 CPU；导出前停掉预览线程，导出线程从头跑一遍，保证导出的每一帧与实时预览走完全相同的标注逻辑。
+18. **mp4v 静音导出、不引入 ffmpeg**：需求只要求导出 MP4；OpenCV 自带 mp4v 在 Windows 上可用，避免演示机额外安装编码器。代价是无音轨，已在文档标注。
+19. **分区线开关与判区解耦**：`ZoneSettings.enabled` 只控制叠加层是否绘制，活动状态/手部 zone 仍照常计算；这样演示时可以隐藏干扰线，而不改变识别结果。
 
 ## 12. 踩坑记录
 

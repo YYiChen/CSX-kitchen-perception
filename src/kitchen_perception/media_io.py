@@ -13,6 +13,7 @@ import os
 import shutil
 import tempfile
 import time
+import math
 from pathlib import Path
 from typing import Iterable
 
@@ -72,6 +73,37 @@ def resize_keep_ratio(frame: np.ndarray, width: int, height: int) -> np.ndarray:
     return cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
 
+def compute_frame_stride(fps: float, max_fps: float) -> int:
+    """按目标最大 FPS 计算抽帧步长；<=1 表示逐帧处理。"""
+    try:
+        fps_value = float(fps)
+        max_value = float(max_fps)
+    except (TypeError, ValueError):
+        return 1
+    if fps_value <= 0.0 or max_value <= 0.0:
+        return 1
+    return max(1, int(math.ceil(fps_value / max_value - 1e-9)))
+
+
+def resize_to_max_width(frame: np.ndarray, max_width: int) -> np.ndarray:
+    """等比缩放到最大宽度，并把宽高取偶数（视频编码器要求）。"""
+    h, w = frame.shape[:2]
+    try:
+        limit = int(max_width)
+    except (TypeError, ValueError):
+        limit = 0
+    if limit <= 0:
+        return frame
+    scale = min(1.0, float(limit) / max(float(w), 1.0))
+    new_w = max(2, int(round(w * scale)))
+    new_h = max(2, int(round(h * scale)))
+    new_w -= new_w % 2
+    new_h -= new_h % 2
+    if (new_w, new_h) == (w, h):
+        return frame
+    return cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+
 def fit_frame(frame: np.ndarray, width: int, height: int) -> np.ndarray:
     """保持比例缩放并用黑色填充到固定画布，返回 width x height。"""
     resized = resize_keep_ratio(frame, width, height)
@@ -128,7 +160,7 @@ def write_video_u(path: str | os.PathLike, frames: Iterable[np.ndarray], fps: fl
             return False
         writer.release()
         writer = None
-        _move_with_retry(tmp_path, target)
+        move_file_with_retry(tmp_path, target)
         return True
     finally:
         if writer is not None:
@@ -136,7 +168,7 @@ def write_video_u(path: str | os.PathLike, frames: Iterable[np.ndarray], fps: fl
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def _move_with_retry(src: Path, dst: Path, attempts: int = 6, delay_s: float = 0.2) -> None:
+def move_file_with_retry(src: Path, dst: Path, attempts: int = 6, delay_s: float = 0.2) -> None:
     """Windows 上杀毒/索引服务可能短暂占用刚写完的文件，移动失败时退避重试。"""
     last_error: OSError | None = None
     for attempt in range(attempts):

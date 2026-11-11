@@ -133,6 +133,7 @@ class ZoneSettings:
     ema_alpha: float = 0.35
     enter_ms: float = 300.0
     labels: dict[str, str] = field(default_factory=lambda: {"A": "备菜区", "B": "处理区"})
+    enabled: bool = True
 
     def normalized(self) -> "ZoneSettings":
         split = clamp(float(self.split_x), 0.05, 0.95)
@@ -143,10 +144,11 @@ class ZoneSettings:
             "A": str(self.labels.get("A", "备菜区")),
             "B": str(self.labels.get("B", "处理区")),
         }
-        return ZoneSettings(split, deadband, alpha, enter_ms, labels)
+        return ZoneSettings(split, deadband, alpha, enter_ms, labels, bool(self.enabled))
 
     def to_dict(self) -> dict:
         return {
+            "enabled": bool(self.enabled),
             "split_x": round(float(self.split_x), 4),
             "deadband": round(float(self.deadband), 4),
             "ema_alpha": round(float(self.ema_alpha), 3),
@@ -172,6 +174,7 @@ class ZoneSettings:
             ema_alpha=float(data.get("ema_alpha", base.ema_alpha)),
             enter_ms=float(data.get("enter_ms", base.enter_ms)),
             labels=labels,
+            enabled=bool(data.get("enabled", base.enabled)),
         ).normalized()
 
     def label(self, zone: str) -> str:
@@ -394,6 +397,7 @@ class ZoneManager:
         hand_zones = {item["zone"] for item in hand_info if item["zone"] in ("A", "B")}
         mismatch = bool(body_zone in ("A", "B") and hand_zones and body_zone not in hand_zones)
         return {
+            "enabled": bool(self.settings.enabled),
             "split_x": round(self.settings.split_x, 4),
             "deadband": round(self.settings.deadband, 4),
             "view_mirrored": bool(self.mirror),

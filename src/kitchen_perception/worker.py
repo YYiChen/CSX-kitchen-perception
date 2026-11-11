@@ -14,6 +14,7 @@ from typing import Optional
 import numpy as np
 
 from .config import Config
+from .media_io import compute_frame_stride, resize_to_max_width
 from .pipeline import Pipeline
 from .sources import create_source
 
@@ -46,6 +47,8 @@ class PerceptionWorker:
         self._latest: Optional[tuple[dict, Optional[np.ndarray]]] = None
         self._latest_monotonic = 0.0
         self.frame_count = 0
+        self.source_fps = 0.0
+        self.video_stride = 1
 
     # ------------------------------------------------------------------ 生命周期
     def start(self) -> None:
@@ -82,7 +85,17 @@ class PerceptionWorker:
             )
             self.pipeline = Pipeline(self.config, source=source, enable_overlay=mirror or True)
             LOGGER.info("感知线程启动: %s", getattr(source, "description", ""))
+            max_width = int(self.config.get("video.max_width", 1280))
+            if self.source_kind == "video":
+                self.source_fps = float(getattr(source, "fps", 0.0) or 0.0)
+                self.video_stride = compute_frame_stride(
+                    self.source_fps, self.config.get("video.max_fps", 30.0)
+                )
+                if getattr(source, "cap", None) is None:
+                    self.error = getattr(source, "last_error", "") or "无法打开视频文件"
+                    return
             failures = 0
+            raw_index = 0
             while not self._stop.is_set():
                 ok, frame, ts_ms = source.read()
                 if not ok:
@@ -97,6 +110,11 @@ class PerceptionWorker:
                         continue
                     break
                 failures = 0
+                raw_index += 1
+                if self.source_kind == "video":
+                    if self.video_stride > 1 and (raw_index - 1) % self.video_stride != 0:
+                        continue
+                    frame = resize_to_max_width(frame, max_width)
                 snapshot = self.pipeline.process(frame, ts_ms)
                 overlay = self.pipeline.last_overlay
                 with self._lock:

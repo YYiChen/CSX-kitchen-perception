@@ -23,6 +23,13 @@
     "backends": ["dshow", "msmf", "any"],
     "probe_max_index": 5
   },
+  "video": {
+    "max_width": 1280,
+    "max_fps": 30.0,
+    "export_max_width": 1280,
+    "export_max_fps": 30.0,
+    "export_dir": "outputs/exports"
+  },
   "zones": {
     "enabled": true,
     "file": "config/zones.json",

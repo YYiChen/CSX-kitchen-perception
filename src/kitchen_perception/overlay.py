@@ -119,6 +119,8 @@ class OverlayRenderer:
     # ------------------------------------------------------------------ HUD
     def _draw_zones(self, canvas: np.ndarray, zones: dict) -> None:
         """画 A/B 半透明分区、分割线、活动区高亮、身体重心。"""
+        if not bool(zones.get("enabled", True)):
+            return
         h, w = canvas.shape[:2]
         try:
             split = float(zones.get("split_x", 0.5))
@@ -251,13 +253,14 @@ class OverlayRenderer:
         if mirror is None:
             mirror = bool(self.config.get("ui.mirror_preview", True))
         canvas = cv2.flip(frame, 1) if mirror else frame.copy()
-        if zones:
+        zones_enabled = bool((zones or {}).get("enabled", True))
+        if zones and zones_enabled:
             self._draw_zones(canvas, zones)
         if pose.present:
             self._draw_pose(canvas, pose, mirror)
         if hand_frames:
             self._draw_hands(canvas, hand_frames, hand_states, mirror)
-        if hand_states:
+        if hand_states and zones_enabled:
             self._draw_hand_zones(canvas, hand_states, mirror)
 
         warning = None

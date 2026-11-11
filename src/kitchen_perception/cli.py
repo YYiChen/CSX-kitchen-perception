@@ -156,6 +156,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_sim.add_argument("--scenario", choices=SIM_SCENARIOS, default="a_to_b")
     p_sim.add_argument("--step-ms", type=float, default=50.0, help="合成帧间隔（毫秒）")
     p_sim.add_argument("--json", dest="json_out", default=None, help="输出 JSON 路径")
+
+    p_export = sub.add_parser("export-video", help="把视频逐帧标注后导出 MP4（无需界面）")
+    p_export.add_argument("--video", required=True, help="输入视频路径")
+    p_export.add_argument("--output", default=None, help="输出 MP4；默认 outputs/exports/<文件名>_annotated.mp4")
+    p_export.add_argument("--max-width", type=int, default=None, help="输出最大宽度（默认 1280）")
+    p_export.add_argument("--max-fps", type=float, default=None, help="处理/输出最大帧率（默认 30）")
     return parser
 
 
@@ -435,6 +441,58 @@ def cmd_simulate(args: argparse.Namespace, config: Config) -> int:
     return 0
 
 
+def cmd_export_video(args: argparse.Namespace, config: Config) -> int:
+    """无界面导出：把输入视频逐帧标注后写成 MP4，并打印进度。"""
+    from .exporter import VideoExportJob
+
+    video = str(Path(args.video).expanduser())
+    if not Path(video).exists():
+        print(f"视频不存在: {video}")
+        return 1
+    if args.output:
+        output = config.resolve_path(args.output)
+    else:
+        stem = Path(video).stem
+        output = config.resolve_path(config.get("video.export_dir", "outputs/exports")) / f"{stem}_annotated.mp4"
+    ensure_dir(output.parent)
+    job = VideoExportJob(
+        config,
+        video,
+        str(output),
+        max_width=args.max_width,
+        max_fps=args.max_fps,
+    )
+    job.start()
+    last_percent: Optional[int] = None
+    while job.is_running():
+        status = job.status()
+        progress = status.get("progress")
+        percent = int(round(float(progress) * 100)) if progress is not None else None
+        if percent != last_percent:
+            last_percent = percent
+            if percent is None:
+                print(f"导出中：{status.get('frames')} 帧", flush=True)
+            else:
+                print(
+                    f"导出中：{percent}% ({status.get('frames')}/{status.get('total_frames')} 帧)",
+                    flush=True,
+                )
+        time.sleep(0.3)
+    status = job.status()
+    state = str(status.get("state") or "idle")
+    if state == "done":
+        print(
+            f"导出完成：{status.get('output_path')}，"
+            f"{status.get('frames')} 帧，{status.get('fps')} fps，用时 {status.get('elapsed_s')}s"
+        )
+        return 0
+    if state == "cancelled":
+        print("导出已取消")
+        return 1
+    print(f"导出失败：{status.get('error') or state}")
+    return 1
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -454,6 +512,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             return cmd_snapshot(args, config)
         if args.command == "simulate":
             return cmd_simulate(args, config)
+        if args.command == "export-video":
+            return cmd_export_video(args, config)
         if args.command == "ui":
             try:
                 from .ui import run_ui

@@ -95,6 +95,19 @@ class TestSettingsAndClassify(unittest.TestCase):
         self.assertGreaterEqual(settings.ema_alpha, 0.01)
         self.assertEqual(settings.enter_ms, 0.0)
         self.assertEqual(settings.label("A"), "备菜区")
+        self.assertTrue(settings.enabled)
+
+    def test_enabled_roundtrip(self):
+        settings = ZoneSettings(split_x=0.4, enabled=False)
+        self.assertFalse(settings.to_dict()["enabled"])
+        restored = ZoneSettings.from_dict(settings.to_dict())
+        self.assertFalse(restored.enabled)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "zones.json"
+            save_settings(path, settings)
+            loaded, warnings, _ = load_settings(load_config(overrides={"zones": {"file": str(path)}}))
+            self.assertFalse(warnings)
+            self.assertFalse(loaded.enabled)
 
     def test_save_load_roundtrip(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -148,12 +161,14 @@ class TestZoneManager(unittest.TestCase):
     def test_apply_and_persist(self):
         with tempfile.TemporaryDirectory() as tmp:
             manager = self._manager(tmp)
-            manager.apply_settings({"split_x": 0.33, "deadband": 0.01, "labels": {"A": "左", "B": "右"}}, persist=True)
+            manager.apply_settings({"split_x": 0.33, "deadband": 0.01, "labels": {"A": "左", "B": "右"}, "enabled": False}, persist=True)
             self.assertAlmostEqual(manager.settings.split_x, 0.33)
+            self.assertFalse(manager.settings.enabled)
             self.assertTrue(Path(tmp, "zones.json").exists())
             manager2 = self._manager(tmp)
             self.assertAlmostEqual(manager2.settings.split_x, 0.33)
             self.assertEqual(manager2.settings.labels["A"], "左")
+            self.assertFalse(manager2.settings.enabled)
 
     def test_reload_if_changed(self):
         with tempfile.TemporaryDirectory() as tmp:

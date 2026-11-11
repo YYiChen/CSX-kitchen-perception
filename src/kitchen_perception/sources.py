@@ -162,6 +162,7 @@ class VideoFileSource(FrameSource):
         self.last_error = ""
         self.frame_index = 0
         self.total_frames = 0
+        self.frame_count_estimate = 0
         self.fps = 25.0
         self._open()
 
@@ -189,6 +190,11 @@ class VideoFileSource(FrameSource):
         self.cap = cap
         fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
         self.fps = fps if 1.0 <= fps <= 240.0 else 25.0
+        try:
+            estimate = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        except (TypeError, ValueError):
+            estimate = 0
+        self.frame_count_estimate = estimate if estimate > 0 else 0
         self.frame_index = 0
         self.total_frames = 0
         return True
