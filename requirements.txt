@@ -1,7 +1,8 @@
-# CSX 人体切菜检测 · 阶段一
-# 开发机实测版本：Python 3.12.10 / mediapipe 0.10.35 / opencv-python 5.0.0.93 /
-#                 opencv-contrib-python 4.10.0.84 / numpy 2.3.5 / Pillow 12.3.0
-mediapipe>=0.10.30,<0.11
-opencv-python>=4.10,<6
-numpy>=1.26,<3
-Pillow>=10,<13
+# CSX 人体切菜检测 · 固定版本（开发机实测：Python 3.12.10 x64 / Windows 11）
+#
+# 只用 opencv-contrib-python：mediapipe 依赖它并自带 cv2。
+# 不要再同时安装 opencv-python，两个包会覆盖同一个 cv2 目录，导致版本不可控。
+mediapipe==0.10.35
+opencv-contrib-python==5.0.0.93
+numpy==2.3.5
+Pillow==12.3.0

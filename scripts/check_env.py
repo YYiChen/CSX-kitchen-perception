@@ -37,7 +37,7 @@ def main(argv: list[str] | None = None) -> int:
         print("请执行: py -3.12 -m pip install -r requirements.txt")
         return 1
     print(f"mediapipe {mediapipe.__version__}")
-    print(f"opencv-python {cv2.__version__}")
+    print(f"opencv {cv2.__version__}")
     print(f"numpy {numpy.__version__}")
     from PIL import __version__ as pillow_version
 

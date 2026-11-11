@@ -4,6 +4,7 @@
 
 ## 1. 代码与模型
 
+- 公开仓库：https://github.com/YYiChen/CSX-kitchen-perception （另一台电脑的 Agent 先看 `AGENT_SETUP.md`）
 - 仓库包含：`src/`、`config/`、`models/`（3 个 task 文件，约 23 MB）、`assets/test/official/`（官方测试图）、`scripts/`、`docs/`、`tests/`
 - 不包含：`outputs/`（运行产物：快照、事件、benchmark）、`__pycache__`、虚拟环境、`scratch/`
 - `models/MANIFEST.json` 记录每个模型的 bytes/sha256/下载 URL；换机后可 `scripts/download_models.py` 重新下载并校验
@@ -14,15 +15,19 @@
 ## 2. 目标机准备
 
 1. 安装 Python 3.12（勾选 Add to PATH）
-2. 拷贝/克隆项目目录到任意路径（**中文路径没问题**，代码已处理）
+2. 拷贝/克隆项目目录到任意路径（**中文路径没问题**，代码已处理），或直接：
+   ```powershell
+   git clone https://github.com/YYiChen/CSX-kitchen-perception.git
+   ```
 3. 安装依赖：
    ```powershell
    cd <项目目录>
    py -3.12 -m pip install -r requirements.txt
    ```
    离线环境：先在开发机 `pip download -r requirements.txt -d wheels\`，把 wheels 目录一起拷过去，目标机 `pip install --no-index --find-links wheels -r requirements.txt`
-   开发机实测版本：mediapipe 0.10.35、opencv-python 5.0.0、numpy 2.3.5、Pillow 12.3；requirements 用区间约束，
-   演示机装好后可先跑 `scripts\check_env.py` 打印实际版本。
+   固定版本：mediapipe 0.10.35、opencv-contrib-python 5.0.0.93、numpy 2.3.5、Pillow 12.3.0。
+   只安装 opencv-contrib-python，**不要**再装 opencv-python（两个包会覆盖同一个 cv2 目录）。
+   演示机装好后可先跑 `scripts\check_env.py` 打印实际版本；也可用 `pwsh -File scripts\setup_windows.ps1` 一键安装+自检。
 4. 校验：
    ```powershell
    $env:PYTHONPATH="$PWD\src"
@@ -49,9 +54,11 @@ py -3.12 -X utf8 -m kitchen_perception probe-cameras
 ```powershell
 # 开发机
 git add -A; git commit -m "..."
-git remote add origin <仓库地址>; git push -u origin main
+git remote add origin https://github.com/YYiChen/CSX-kitchen-perception.git
+git push -u origin main
 # 演示机
-git clone <仓库地址>; cd CSX_人体切菜检测
+git clone https://github.com/YYiChen/CSX-kitchen-perception.git
+cd CSX-kitchen-perception
 py -3.12 -m pip install -r requirements.txt
 ```
 

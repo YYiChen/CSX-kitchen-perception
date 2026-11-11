@@ -1,5 +1,9 @@
 # CSX 人体切菜检测 · 演示版 + 阶段一/二
 
+> GitHub: <https://github.com/YYiChen/CSX-kitchen-perception>
+>
+> 另一台电脑的 Agent 配置请直接看 [AGENT_SETUP.md](AGENT_SETUP.md)。
+
 电脑端（Windows）实时感知程序：调用**默认摄像头**，识别**人体躯干状态**与**五指曲张状态**；阶段二增加**A/B 操作区**与**切菜节奏/活动状态**识别。2026-11-11 增加**两状态演示模式**（正在切菜 / 切菜完成），用于固定机位、侧身切菜视频的稳定演示；同一天增加**界面内视频导入、标注预览与 MP4 导出**，A/B 分区线可一键显示/隐藏。菜刀、食材等物品识别仍不在范围内。
 
 技术路线是成熟的 MediaPipe Tasks（Pose Landmarker + Hand Landmarker）+ 规则化几何/时序后处理，**不训练模型、不自己写网络**。
@@ -43,9 +47,9 @@
 
 ## 环境
 
-- Windows 10/11，Python 3.12（开发机实测 3.12.10）
-- 依赖：`mediapipe`、`opencv-python`、`numpy`、`Pillow`（见 requirements.txt，无其它第三方依赖）
-- 摄像头：电脑自带或 USB 摄像头，默认 index 0
+- Windows 10/11 x64，Python 3.12.x 64-bit（开发机实测 3.12.10，来自 python.org，需带 Tcl/Tk）
+- 依赖：`mediapipe`、`opencv-contrib-python`、`numpy`、`Pillow`（见 requirements.txt，无其它第三方依赖）
+- 摄像头：电脑自带或 USB 摄像头，默认 index 0；只需 CPU，不需要 CUDA/GPU、Node.js 或 ffmpeg
 
 ## 快速开始
 
@@ -53,6 +57,8 @@
 # 0) 进入项目根目录，按需创建虚拟环境（可选）
 # 1) 安装依赖
 py -3.12 -m pip install -r requirements.txt
+# 或运行一键检查脚本（安装依赖 + 检查模型/摄像头）：
+# pwsh -File scripts/setup_windows.ps1
 
 # 2) 校验模型文件（大小 + sha256）
 $env:PYTHONPATH="$PWD\src"
@@ -61,11 +67,11 @@ py -3.12 -X utf8 -m kitchen_perception verify-models
 # 3) 启动桌面界面（演示主面板 + 阶段一/二细节）
 py -3.12 -X utf8 -m kitchen_perception ui
 
-# 3b) 用侧身切菜视频做两状态演示（按实际路径替换；UI 内按空格暂停/继续）
-py -3.12 -X utf8 -m kitchen_perception ui --video outputs/video_review/chopping_720p_30fps.mp4
+# 3b) 用视频做两状态演示（路径替换成自己的视频；UI 内按空格暂停/继续）
+py -3.12 -X utf8 -m kitchen_perception ui --video "D:\path\to\chopping.mp4"
 
 # 3c) 无界面导出带标注的 MP4（可选；不启动 Tk 界面）
-py -3.12 -X utf8 -m kitchen_perception export-video --video outputs/video_demo/chopping_720p_input.mp4 --output outputs/exports/demo_annotated.mp4
+py -3.12 -X utf8 -m kitchen_perception export-video --video "D:\path\to\chopping.mp4" --output outputs/exports/demo_annotated.mp4
 
 # 4) 无头运行 + OpenCV 预览（按 q 退出）
 py -3.12 -X utf8 -m kitchen_perception run --preview
@@ -194,7 +200,7 @@ outputs/                         运行产物（默认被 .gitignore 忽略）
 代码全程 git 管理，模型（约 23 MB）随仓库提交；迁移步骤见 `docs/migration.md`：
 
 1. `git clone` 或直接拷贝整个项目目录（含 models/）
-2. 目标机 `pip install -r requirements.txt`
+2. 目标机 `py -3.12 -m pip install -r requirements.txt`（或 `pwsh -File scripts/setup_windows.ps1`）
 3. `$env:PYTHONPATH="$PWD\src"; py -3.12 -m kitchen_perception verify-models` 校验模型
 4. `scripts/check_env.py` 检查 Python/依赖/摄像头
 5. 启动 `scripts/run_demo.ps1`
@@ -226,5 +232,6 @@ outputs/                         运行产物（默认被 .gitignore 忽略）
 - `docs/verification.md`：验证方法与验收清单（阶段一 + 阶段二 + 两状态演示）
 - `docs/verification_report.md`：T5 阶段一独立验证报告（历史记录）
 - `docs/migration.md`：演示机迁移/离线部署步骤
+- `AGENT_SETUP.md`：另一台电脑的 Agent 配置/验收清单（环境、依赖、摄像头、测试）
 - `docs/ui_notes.md`：界面结构、交互与自测记录
 - `docs/research_notes.md`、`docs/test_assets.md`：调研素材与实测数据
